@@ -1,0 +1,74 @@
+import { parseForESLint } from "@graphql-eslint/eslint-plugin";
+import { extractDocuments } from "./documents.js";
+import type { GqlNode, ParseError, ParsedDocument, ParserServices } from "./types.js";
+
+const MAX_CACHE_ENTRIES = 8;
+
+type CacheEntry = { code: string; documents: ParsedDocument[] };
+
+const cache = new Map<string, CacheEntry>();
+let parseCallCount = 0;
+
+export function clearParseCache(): void {
+  cache.clear();
+  parseCallCount = 0;
+}
+
+export function getParseCallCount(): number {
+  return parseCallCount;
+}
+
+export function parseDocuments(options: {
+  code: string;
+  filePath: string;
+  schemaSdl?: string;
+}): ParsedDocument[] {
+  const cached = cache.get(options.filePath);
+  if (cached && cached.code === options.code) {
+    cache.delete(options.filePath);
+    cache.set(options.filePath, cached);
+    return cached.documents;
+  }
+
+  const documents = extractDocuments(options.code, options.filePath).map((document) => {
+    parseCallCount += 1;
+    try {
+      const parserOptions =
+        options.schemaSdl === undefined
+          ? { filePath: document.filePath }
+          : { filePath: document.filePath, schemaSdl: options.schemaSdl };
+      const result = parseForESLint(document.text, parserOptions) as unknown as {
+        ast: GqlNode;
+        services: ParserServices;
+      };
+      if (options.schemaSdl === undefined && result.services.schema === null) {
+        throw new Error(
+          `No GraphQL schema found for "${document.filePath}". Configure a graphql-config schema.`,
+        );
+      }
+      return { kind: "parsed", document, ast: result.ast, services: result.services } as const;
+    } catch (error) {
+      return { kind: "error", document, error: toParseError(error) } as const;
+    }
+  });
+
+  cache.set(options.filePath, { code: options.code, documents });
+  if (cache.size > MAX_CACHE_ENTRIES) {
+    const oldest = cache.keys().next();
+    if (!oldest.done) cache.delete(oldest.value);
+  }
+  return documents;
+}
+
+function toParseError(error: unknown): ParseError {
+  const raw = error as { message?: string; lineNumber?: number; column?: number };
+  // Only GraphQL syntax errors carry a `lineNumber` (see @graphql-eslint/eslint-plugin's
+  // parser.js, which attaches it only for `GraphQLError` instances). Config/schema loading
+  // failures do not, so re-throw those instead of masking them as a per-document parse error.
+  if (typeof raw?.message !== "string" || typeof raw.lineNumber !== "number") throw error;
+  return {
+    message: raw.message,
+    line: raw.lineNumber,
+    column: raw.column ?? 0,
+  };
+}
