@@ -1,0 +1,9 @@
+{
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "jsPlugins": ["../../../../dist/index.js"],
+  "rules": {
+    "graphql/no-root-type": ["error", { "disallow": ["mutation"] }],
+    "graphql/no-duplicate-fields": "error"
+  }
+}

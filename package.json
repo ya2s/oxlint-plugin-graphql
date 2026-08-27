@@ -4,9 +4,13 @@
   "description": "Run @graphql-eslint/eslint-plugin rules on oxlint",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "packageManager": "pnpm@11.24.0",
-  "files": ["dist"],
+  "files": [
+    "dist"
+  ],
   "exports": {
     ".": "./dist/index.js",
     "./configs/*": "./dist/configs/*"
@@ -25,8 +29,10 @@
   },
   "devDependencies": {
     "@graphql-eslint/eslint-plugin": "^4.4.1",
+    "@types/esquery": "^1.5.4",
     "@types/node": "^22.12.0",
     "eslint": "^9",
+    "esquery": "^1.7.0",
     "graphql": "^16",
     "oxlint": "^1.80.0",
     "tsdown": "^0.22.14",

@@ -19,8 +19,39 @@ export type TraverseHandlers = {
 
 export function traverse(root: GqlNode, handlers: TraverseHandlers): void {
   root.parent = null;
+  linkParents(root);
   const ancestors: GqlNode[] = [];
   visit(root, ancestors, handlers);
+}
+
+/**
+ * Sets `.parent` for every node in the tree before any listener runs. Real graphql-eslint
+ * parents the whole AST once during conversion, before any rule's own traversal begins, so a
+ * listener that reaches into its own not-yet-visited subtree always sees `.parent` already set
+ * on those descendants — e.g. `no-duplicate-fields`'s `SelectionSet(node)` listener reads
+ * `node.selections[i].name.parent` directly, without visiting those nodes itself first.
+ * `visit()` below re-assigns the same `.parent` values as it descends (harmless, and left in
+ * place so `visit()` stays correct standalone), but without this separate up-front pass a
+ * listener firing on an ancestor would see `.parent === undefined` on any child it inspects
+ * before the walk reaches it — reproduced with `no-duplicate-fields` on a real duplicate-field
+ * query, which threw `TypeError: Cannot read properties of undefined (reading 'type')`.
+ */
+function linkParents(node: GqlNode): void {
+  const keys = KNOWN_VISITOR_KEYS[node.type] ?? Object.keys(node).filter((key) => !IGNORED_KEYS.has(key) && !key.startsWith("_"));
+  for (const key of keys) {
+    const value = node[key];
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (isNode(item)) {
+          item.parent = node;
+          linkParents(item);
+        }
+      }
+    } else if (isNode(value)) {
+      value.parent = node;
+      linkParents(value);
+    }
+  }
 }
 
 function visit(node: GqlNode, ancestors: GqlNode[], handlers: TraverseHandlers): void {

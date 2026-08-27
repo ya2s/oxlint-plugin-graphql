@@ -1,0 +1,181 @@
+import { defineRule } from "@oxlint/plugins";
+import type { Context, Rule } from "@oxlint/plugins";
+import esquery from "esquery";
+import { createRuleContext } from "./context.js";
+import { parseDocuments } from "./parse.js";
+import { createReportMapper } from "./report-mapper.js";
+import type { GqlReportDescriptor } from "./report-mapper.js";
+import { createSourceCode } from "./source-code.js";
+import { traverse } from "./traverse.js";
+import type { GqlNode, ParsedDocument } from "./types.js";
+
+export type GraphQLESLintRuleLike = {
+  meta: {
+    messages?: Record<string, string>;
+    fixable?: "code" | "whitespace";
+    hasSuggestions?: boolean;
+    schema?: unknown;
+    docs?: { description?: string };
+  };
+  create(context: unknown): Record<string, ((node: GqlNode) => void) | undefined>;
+};
+
+export function readSchemaSdl(settings: Readonly<Record<string, unknown>>): string | undefined {
+  const graphql = settings.graphql as { schemaSdl?: unknown } | undefined;
+  return typeof graphql?.schemaSdl === "string" ? graphql.schemaSdl : undefined;
+}
+
+export function toOxlintRule(ruleId: string, rule: GraphQLESLintRuleLike): Rule {
+  return defineRule({
+    meta: {
+      fixable: rule.meta.fixable,
+      hasSuggestions: rule.meta.hasSuggestions,
+      // Without forwarding the rule's own options schema, oxlint rejects any config that passes
+      // options at all ("Rule '<id>' does not accept options") — measured running no-root-type
+      // (which requires a `disallow` option) through `oxlintrc.json`.
+      schema: rule.meta.schema,
+      // Without forwarding `messages`, oxlint's own RuleTester rejects any `messageId` assertion
+      // against this rule ("Cannot use 'messageId' if rule under test doesn't define
+      // 'meta.messages'") — measured running RuleTester against no-anonymous-operations.
+      messages: rule.meta.messages,
+      docs: { description: rule.meta.docs?.description ?? ruleId },
+    },
+    createOnce(context) {
+      return {
+        Program() {
+          const parsed = parseDocuments({
+            code: context.sourceCode.text,
+            filePath: context.physicalFilename,
+            schemaSdl: readSchemaSdl(context.settings as Readonly<Record<string, unknown>>),
+          });
+
+          for (const document of parsed) {
+            if (document.kind !== "parsed") continue;
+            runRuleOnDocument({ ruleId, rule, parsed: document, context });
+          }
+        },
+      };
+    },
+  } as Parameters<typeof defineRule>[0]);
+}
+
+type VisitorObject = Record<string, ((node: GqlNode) => void) | undefined>;
+
+/** esquery's own types come from `estree`, which GqlNode doesn't structurally satisfy (GraphQL
+ *  AST node kinds aren't ESTree node kinds). The matcher logic itself is fully structural (it
+ *  only ever reads `.type` and duck-typed fields), so a cast through this alias is safe. */
+type EsqueryNode = Parameters<typeof esquery.matches>[0];
+
+function runRuleOnDocument(input: {
+  ruleId: string;
+  rule: GraphQLESLintRuleLike;
+  parsed: Extract<ParsedDocument, { kind: "parsed" }>;
+  context: Context;
+}): void {
+  const { ruleId, rule, parsed, context } = input;
+
+  const sourceCode = createSourceCode({
+    text: parsed.document.text,
+    ast: parsed.ast,
+    services: parsed.services,
+  });
+
+  // Deliberately do NOT forward the original descriptor's `messageId` to `context.report()`
+  // here, even though oxlint's `Diagnostic` type allows `message` and `messageId` together.
+  // Measured: when a diagnostic carries `messageId`, oxlint's own engine re-derives the
+  // reported `message` from `meta.messages[messageId]` itself — and since we never also send a
+  // matching `data`, that comes back as the raw, un-interpolated template (e.g.
+  // `"{{ type }} \`{{ fieldName }}\` defined multiple times."`), silently discarding the
+  // already-correct, ESLint-exact interpolation `report-mapper.ts` computed. Reproduced on the
+  // real oxlint CLI (not just RuleTester) with no-duplicate-fields and no-deprecated. `message`
+  // alone is what real graphql-eslint/ESLint users and tooling see, so it must win.
+  const report = createReportMapper({
+    document: parsed.document,
+    messages: rule.meta.messages ?? {},
+    emit: (diagnostic) => {
+      context.report({
+        message: diagnostic.message,
+        loc: diagnostic.loc,
+        ...(diagnostic.fix ? { fix: () => diagnostic.fix!() } : {}),
+        ...(diagnostic.suggest
+          ? { suggest: diagnostic.suggest.map((s) => ({ desc: s.desc, fix: () => s.fix() })) }
+          : {}),
+      });
+    },
+  });
+
+  const ruleContext = createRuleContext({
+    ruleId,
+    options: context.options,
+    settings: (context.settings ?? {}) as Readonly<Record<string, unknown>>,
+    filename: parsed.document.filePath,
+    physicalFilename: context.physicalFilename,
+    sourceCode,
+    report: report as (descriptor: GqlReportDescriptor) => void,
+  });
+
+  let visitor: VisitorObject;
+  try {
+    visitor = rule.create(ruleContext);
+  } catch (error) {
+    throw wrapRuleError(error, ruleId, context.physicalFilename);
+  }
+
+  try {
+    runVisitor(parsed.ast, visitor);
+  } catch (error) {
+    throw wrapRuleError(error, ruleId, context.physicalFilename);
+  }
+}
+
+/**
+ * graphql-eslint rules register their visitors under ESLint-style esquery selector keys, not
+ * only plain node-type names: e.g. no-anonymous-operations uses
+ * `"OperationDefinition[name=undefined]"`, no-root-type uses
+ * `":matches(ObjectTypeDefinition, ObjectTypeExtension) > .name[value=/^(...)$/]"`, and several
+ * others use attribute selectors, field selectors (`.gqlType`), or comma-separated lists. A
+ * naive `visitor[node.type]` dispatch — the obvious reading of Task 4's `traverse` callback
+ * shape — silently drops every one of those listeners, including the plugin's own baseline
+ * example rule (no-anonymous-operations). This mirrors ESLint's NodeEventGenerator: each
+ * listener key is parsed once as an esquery selector (a bare type name like "Field" parses to
+ * an "identifier" selector, so plain-type listeners keep working unchanged), then tested
+ * against the node with its ancestry — parent-first, which is esquery's convention and the
+ * reverse of `traverse`'s root-first order — on enter, or on leave for a `:exit`-suffixed key.
+ */
+function runVisitor(ast: GqlNode, visitor: VisitorObject): void {
+  const listeners = Object.entries(visitor)
+    .filter((entry): entry is [string, (node: GqlNode) => void] => typeof entry[1] === "function")
+    .map(([key, fn]) => {
+      const exit = key.endsWith(":exit");
+      const selectorSource = exit ? key.slice(0, -":exit".length) : key;
+      return { exit, selector: esquery.parse(selectorSource), fn };
+    });
+
+  if (listeners.length === 0) return;
+
+  traverse(ast, {
+    enter: (node, ancestors) => {
+      const ancestry = ancestors.reverse() as unknown as EsqueryNode[];
+      for (const listener of listeners) {
+        if (!listener.exit && esquery.matches(node as unknown as EsqueryNode, listener.selector, ancestry)) {
+          listener.fn(node);
+        }
+      }
+    },
+    leave: (node, ancestors) => {
+      const ancestry = ancestors.reverse() as unknown as EsqueryNode[];
+      for (const listener of listeners) {
+        if (listener.exit && esquery.matches(node as unknown as EsqueryNode, listener.selector, ancestry)) {
+          listener.fn(node);
+        }
+      }
+    },
+  });
+}
+
+function wrapRuleError(error: unknown, ruleId: string, filePath: string): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  const wrapped = new Error(`[oxlint-plugin-graphql] rule "${ruleId}" failed on ${filePath}: ${message}`);
+  if (error instanceof Error && error.stack) wrapped.stack = error.stack;
+  return wrapped;
+}
