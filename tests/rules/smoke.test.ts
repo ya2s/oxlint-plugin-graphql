@@ -13,18 +13,36 @@ const fixtures = fileURLToPath(new URL("./fixtures/smoke", import.meta.url));
 // through a different mechanism (schema-based typeInfo lookup, node.parent, a Relay-convention
 // check spanning multiple selectors).
 //
-// 58 of the 64 rules are enabled. The other 6 —  no-unused-fragments, no-one-place-fragments,
-// no-unused-fields, require-import-fragment, require-selections, unique-operation-name — all
-// call graphql-eslint's own `requireGraphQLOperations`, which throws unless graphql-config's
+// 57 of the 64 rules are enabled. The other 7 all call graphql-eslint's own
+// `requireGraphQLOperations` with no try/catch, which throws unless graphql-config's
 // `documents` field is set and loaded (see tests/fixtures's shared graphql configs, none of
 // which set `documents`: a glob matching no file with a real operation makes the parser throw,
 // per an existing project constraint). That isn't a gap in this plugin's wiring — it's
 // graphql-eslint's own documented requirement — so exercising it belongs to a fixture with a
-// real `documents` glob, not this smoke test. 4 more rules (alphabetize, no-root-type,
-// require-description, selection-set-depth) require rule options with no default; each is
-// given a minimal valid options value here instead of being excluded, so the smoke test also
-// proves options-schema forwarding (see rule-factory.ts's `schema: rule.meta.schema`) for that
-// shape of rule.
+// real `documents` glob, not this smoke test. Two different reasons land a rule in this list —
+// each verified directly against this fixture, not assumed:
+//   - Four rules call `requireGraphQLOperations` synchronously inside `create()`, before
+//     returning any visitor at all, so they throw for *every* document regardless of its
+//     content: no-unused-fields, no-one-place-fragments, require-import-fragment,
+//     require-selections.
+//   - no-unused-fragments calls it inside a `Document(node)` listener, which — because every
+//     parsed document has exactly one `Document` root node — also fires, and therefore throws,
+//     unconditionally for every document.
+//   - The remaining two only call it inside a listener that requires a specific node to be
+//     present, so they throw only when the document actually contains one:
+//     unique-operation-name throws here because this fixture's operation is named
+//     (`OperationDefinition[name!=undefined]`) — confirmed by running it in isolation.
+//     unique-fragment-name would only throw given a `fragment` definition
+//     (`FragmentDefinition`); this fixture has none, so including it here would pass
+//     *vacuously* (its listener would simply never fire) rather than proving anything — this
+//     was an actual bug fixed in this file (see the report), not a hypothetical.
+// `selection-set-depth` also calls `requireGraphQLOperations`, but wraps it in try/catch and
+// degrades to a warning instead of throwing, so it legitimately stays in the enabled set.
+//
+// 4 more rules (alphabetize, no-root-type, require-description, selection-set-depth) require
+// rule options with no default; each is given a minimal valid options value here instead of
+// being excluded, so the smoke test also proves options-schema forwarding (see
+// rule-factory.ts's `schema: rule.meta.schema`) for that shape of rule.
 describe("a large, realistic set of rules run together", () => {
   const result = runOxlint({ cwd: fixtures, args: ["app.ts"] });
 

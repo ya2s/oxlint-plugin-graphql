@@ -87,7 +87,6 @@
       }
     ],
     "graphql/strict-id-in-types": "error",
-    "graphql/unique-enum-value-names": "error",
-    "graphql/unique-fragment-name": "error"
+    "graphql/unique-enum-value-names": "error"
   }
 }
