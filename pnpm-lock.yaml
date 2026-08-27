@@ -11,6 +11,9 @@ importers:
       '@oxlint/plugins':
         specifier: ^1.80.0
         version: 1.80.0
+      esquery:
+        specifier: ^1.7.0
+        version: 1.7.0
     devDependencies:
       '@graphql-eslint/eslint-plugin':
         specifier: ^4.4.1
@@ -24,9 +27,6 @@ importers:
       eslint:
         specifier: ^9
         version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)
-      esquery:
-        specifier: ^1.7.0
-        version: 1.7.0
       graphql:
         specifier: ^16
         version: 16.14.2

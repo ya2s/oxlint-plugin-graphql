@@ -19,24 +19,50 @@ export type TraverseHandlers = {
 
 export function traverse(root: GqlNode, handlers: TraverseHandlers): void {
   root.parent = null;
-  linkParents(root);
   const ancestors: GqlNode[] = [];
   visit(root, ancestors, handlers);
 }
 
+let linkParentsCallCount = 0;
+
+/** Test-only instrumentation (mirrors parse.ts's getParseCallCount/clearParseCache pattern):
+ *  lets a test prove `linkParents` runs exactly once per parse, not once per `traverse()` call. */
+export function getLinkParentsCallCount(): number {
+  return linkParentsCallCount;
+}
+
+export function resetLinkParentsCallCount(): void {
+  linkParentsCallCount = 0;
+}
+
 /**
- * Sets `.parent` for every node in the tree before any listener runs. Real graphql-eslint
- * parents the whole AST once during conversion, before any rule's own traversal begins, so a
- * listener that reaches into its own not-yet-visited subtree always sees `.parent` already set
- * on those descendants — e.g. `no-duplicate-fields`'s `SelectionSet(node)` listener reads
+ * Sets `.parent` for every node in the tree, once. Called from `parse.ts` immediately after
+ * `parseForESLint` produces an AST — NOT from `traverse()` — so that by the time any rule's own
+ * traversal (or `SourceCode#getNodeByRangeIndex`, which also calls `traverse()` internally, in a
+ * loop for every comment in `no-hashtag-description`) begins, every node's `.parent` is already
+ * correct. This matches real graphql-eslint/ESLint's own architecture: the whole AST is parented
+ * once during parsing/conversion, decoupled from the later rule-visiting traversal.
+ *
+ * Without this being a separate, one-time pass, a rule listener that reaches into its own
+ * not-yet-visited subtree sees `.parent === undefined` on descendants the walk hasn't reached
+ * yet — e.g. `no-duplicate-fields`'s `SelectionSet(node)` listener reads
  * `node.selections[i].name.parent` directly, without visiting those nodes itself first.
- * `visit()` below re-assigns the same `.parent` values as it descends (harmless, and left in
- * place so `visit()` stays correct standalone), but without this separate up-front pass a
- * listener firing on an ancestor would see `.parent === undefined` on any child it inspects
- * before the walk reaches it — reproduced with `no-duplicate-fields` on a real duplicate-field
- * query, which threw `TypeError: Cannot read properties of undefined (reading 'type')`.
+ * Reproduced with `no-duplicate-fields` on a real duplicate-field query, which threw
+ * `TypeError: Cannot read properties of undefined (reading 'type')`.
+ *
+ * `traverse()`'s own `visit()` still re-assigns the same `.parent` values as it descends, so
+ * `traverse()` stays correct standalone (its own tests build plain object trees directly,
+ * without going through `parse.ts`) — but doing that assignment is O(n) work folded into the
+ * single listener-firing pass, not a second full O(n) pass on top of it the way calling
+ * `linkParents` from inside `traverse()` would be.
  */
-function linkParents(node: GqlNode): void {
+export function linkParents(root: GqlNode): void {
+  linkParentsCallCount += 1;
+  root.parent = null;
+  linkChildren(root);
+}
+
+function linkChildren(node: GqlNode): void {
   const keys = KNOWN_VISITOR_KEYS[node.type] ?? Object.keys(node).filter((key) => !IGNORED_KEYS.has(key) && !key.startsWith("_"));
   for (const key of keys) {
     const value = node[key];
@@ -44,12 +70,12 @@ function linkParents(node: GqlNode): void {
       for (const item of value) {
         if (isNode(item)) {
           item.parent = node;
-          linkParents(item);
+          linkChildren(item);
         }
       }
     } else if (isNode(value)) {
       value.parent = node;
-      linkParents(value);
+      linkChildren(value);
     }
   }
 }

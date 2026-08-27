@@ -53,5 +53,24 @@ describe("rule error wrapping", () => {
     });
 
     expect(() => visitor.Program()).toThrow(/rule "exploding" failed on .*app\.ts: kaboom/);
+
+    // A thrown error's `.stack` (not just `.message`) is what a consumer actually sees — e.g.
+    // an uncaught-exception logger prints `.stack`, whose first line is `${name}: ${message}`
+    // only when nothing has overwritten it. This previously broke silently: the wrapper set
+    // `wrapped.stack = error.stack`, which put the *original* graphql-eslint error's message
+    // back on top of `.stack`, so the "rule ... failed on ..." wrapper text never appeared
+    // anywhere a consumer would actually look, even though `.message` alone (asserted above)
+    // still looked correct.
+    let caught: unknown;
+    try {
+      visitor.Program();
+    } catch (error) {
+      caught = error;
+    }
+    expect(caught).toBeInstanceOf(Error);
+    const thrown = caught as Error;
+    expect(thrown.stack).toContain('rule "exploding" failed on');
+    expect(thrown.stack).toContain("kaboom");
+    expect((thrown.cause as Error | undefined)?.message).toBe("kaboom");
   });
 });

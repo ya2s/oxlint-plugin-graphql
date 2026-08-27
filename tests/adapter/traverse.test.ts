@@ -1,7 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
-import { traverse } from "../../src/adapter/traverse.js";
+import { getLinkParentsCallCount, resetLinkParentsCallCount, traverse } from "../../src/adapter/traverse.js";
 import { clearParseCache, parseDocuments } from "../../src/adapter/parse.js";
 import type { GqlNode } from "../../src/adapter/types.js";
 
@@ -217,5 +217,67 @@ describe("traverse", () => {
     // Verify that parent was set correctly by the traverser
     expect(root.parent).toBeNull();
     expect(child.parent).toBe(root);
+  });
+
+  it("links every node's parent at parse time, before any traversal (and does not re-link on later traversals)", () => {
+    clearParseCache();
+    resetLinkParentsCallCount();
+
+    const filePath = join(projectDir, "app.ts");
+    const code = ["const q = gql`", "  query User {", "    user { id }", "  }", "`;", ""].join("\n");
+
+    const parsed = parseDocuments({ code, filePath });
+    expect(parsed[0]!.kind).toBe("parsed");
+    if (parsed[0]!.kind !== "parsed") return;
+    const root = parsed[0]!.ast;
+
+    // linkParents ran exactly once, as part of parsing -- not lazily, not from traverse().
+    expect(getLinkParentsCallCount()).toBe(1);
+
+    // Reach a deeply-nested node by walking the plain object structure directly, without
+    // calling traverse() at all, and check its parent chain is already wired. This is the
+    // "parents are linked before any rule runs" guarantee: a rule visitor firing on an ancestor
+    // (e.g. SelectionSet) can safely read a not-yet-visited descendant's `.parent` the moment
+    // it fires, because linking already happened at parse time, not during that traversal.
+    // Same restriction traverse.ts's own walk applies: the root "Program" node also carries
+    // `tokens`/`comments` arrays of plain `{ type, range }` objects (lexer tokens can have a
+    // `type` like "Name", coinciding with real AST node type names) that are never linked, so
+    // only its `body` counts as real children.
+    const ignoredKeys = new Set(["parent", "leadingComments", "trailingComments"]);
+    let deepest: GqlNode = root;
+    for (let steps = 0; steps < 50; steps++) {
+      const keys =
+        deepest.type === "Program"
+          ? ["body"]
+          : Object.keys(deepest as unknown as Record<string, unknown>).filter(
+              (key) => !ignoredKeys.has(key) && !key.startsWith("_"),
+            );
+      const values = keys.map((key) => (deepest as unknown as Record<string, unknown>)[key]);
+      const nextChild = values
+        .flatMap((v) => (Array.isArray(v) ? v : [v]))
+        .find(
+          (v): v is GqlNode => typeof v === "object" && v !== null && typeof (v as GqlNode).type === "string",
+        );
+      if (!nextChild) break;
+      deepest = nextChild;
+    }
+    expect(deepest).not.toBe(root);
+    let current: GqlNode | null | undefined = deepest;
+    let reachedRoot = false;
+    for (let steps = 0; steps < 50 && current; steps++) {
+      if (current === root) {
+        reachedRoot = true;
+        break;
+      }
+      current = current.parent;
+    }
+    expect(reachedRoot).toBe(true);
+
+    // Now call traverse() twice -- once directly, once more to simulate a second rule visiting
+    // the same cached AST -- and confirm linkParents is never called again: traverse() itself
+    // no longer runs a separate parenting pass, only its usual single listener-firing walk.
+    traverse(root, { enter: () => {}, leave: () => {} });
+    traverse(root, { enter: () => {}, leave: () => {} });
+    expect(getLinkParentsCallCount()).toBe(1);
   });
 });

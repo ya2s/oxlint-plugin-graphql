@@ -1,5 +1,6 @@
 import { parseForESLint } from "@graphql-eslint/eslint-plugin";
 import { extractDocuments } from "./documents.js";
+import { linkParents } from "./traverse.js";
 import type { GqlNode, ParseError, ParsedDocument, ParserServices } from "./types.js";
 
 const MAX_CACHE_ENTRIES = 8;
@@ -41,6 +42,10 @@ export function parseDocuments(options: {
         ast: GqlNode;
         services: ParserServices;
       };
+      // Parent the whole AST once, here, before it is ever handed to a rule. See
+      // linkParents' own doc comment in traverse.ts for why this must happen at parse time
+      // rather than inside traverse() itself.
+      linkParents(result.ast);
       return { kind: "parsed", document, ast: result.ast, services: result.services } as const;
     } catch (error) {
       return { kind: "error", document, error: toParseError(error) } as const;

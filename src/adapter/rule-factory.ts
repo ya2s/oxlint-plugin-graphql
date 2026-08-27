@@ -5,6 +5,7 @@ import { createRuleContext } from "./context.js";
 import { parseDocuments } from "./parse.js";
 import { createReportMapper } from "./report-mapper.js";
 import type { GqlReportDescriptor } from "./report-mapper.js";
+import { compareSpecificity, parseSelector } from "./selectors.js";
 import { createSourceCode } from "./source-code.js";
 import { traverse } from "./traverse.js";
 import type { GqlNode, ParsedDocument } from "./types.js";
@@ -137,37 +138,40 @@ function runRuleOnDocument(input: {
  * naive `visitor[node.type]` dispatch — the obvious reading of Task 4's `traverse` callback
  * shape — silently drops every one of those listeners, including the plugin's own baseline
  * example rule (no-anonymous-operations). This mirrors ESLint's NodeEventGenerator: each
- * listener key is parsed once as an esquery selector (a bare type name like "Field" parses to
- * an "identifier" selector, so plain-type listeners keep working unchanged), then tested
- * against the node with its ancestry — parent-first, which is esquery's convention and the
- * reverse of `traverse`'s root-first order — on enter, or on leave for a `:exit`-suffixed key.
+ * listener key is parsed once (and cached — see selectors.ts) as an esquery selector (a bare
+ * type name like "Field" parses to an "identifier" selector, so plain-type listeners keep
+ * working unchanged), then tested against the node with its ancestry — parent-first, which is
+ * esquery's convention and the reverse of `traverse`'s root-first order — on enter, or on leave
+ * for a `:exit`-suffixed key.
+ *
+ * When more than one selector matches the *same* node, ESLint fires them in ascending
+ * specificity order (attribute/field count, then identifier count, then source as a tiebreak —
+ * see selectors.ts's `compareSpecificity`), the same way for both the enter and exit phases.
+ * Sorting each phase's listener list once, up front, produces that same relative order at every
+ * node without needing ESLint's own per-node-type bucketing (an unneeded optimization here,
+ * since this dispatch already just tests every listener against every node).
  */
 function runVisitor(ast: GqlNode, visitor: VisitorObject): void {
   const listeners = Object.entries(visitor)
     .filter((entry): entry is [string, (node: GqlNode) => void] => typeof entry[1] === "function")
-    .map(([key, fn]) => {
-      const exit = key.endsWith(":exit");
-      const selectorSource = exit ? key.slice(0, -":exit".length) : key;
-      return { exit, selector: esquery.parse(selectorSource), fn };
-    });
+    .map(([key, fn]) => ({ selector: parseSelector(key), fn }));
 
   if (listeners.length === 0) return;
+
+  const enterListeners = listeners.filter((l) => !l.selector.isExit).sort((a, b) => compareSpecificity(a.selector, b.selector));
+  const exitListeners = listeners.filter((l) => l.selector.isExit).sort((a, b) => compareSpecificity(a.selector, b.selector));
 
   traverse(ast, {
     enter: (node, ancestors) => {
       const ancestry = ancestors.reverse() as unknown as EsqueryNode[];
-      for (const listener of listeners) {
-        if (!listener.exit && esquery.matches(node as unknown as EsqueryNode, listener.selector, ancestry)) {
-          listener.fn(node);
-        }
+      for (const listener of enterListeners) {
+        if (esquery.matches(node as unknown as EsqueryNode, listener.selector.root, ancestry)) listener.fn(node);
       }
     },
     leave: (node, ancestors) => {
       const ancestry = ancestors.reverse() as unknown as EsqueryNode[];
-      for (const listener of listeners) {
-        if (listener.exit && esquery.matches(node as unknown as EsqueryNode, listener.selector, ancestry)) {
-          listener.fn(node);
-        }
+      for (const listener of exitListeners) {
+        if (esquery.matches(node as unknown as EsqueryNode, listener.selector.root, ancestry)) listener.fn(node);
       }
     },
   });
@@ -175,7 +179,12 @@ function runVisitor(ast: GqlNode, visitor: VisitorObject): void {
 
 function wrapRuleError(error: unknown, ruleId: string, filePath: string): Error {
   const message = error instanceof Error ? error.message : String(error);
-  const wrapped = new Error(`[oxlint-plugin-graphql] rule "${ruleId}" failed on ${filePath}: ${message}`);
-  if (error instanceof Error && error.stack) wrapped.stack = error.stack;
-  return wrapped;
+  // Do NOT overwrite `.stack` with the original error's stack: its first line repeats the
+  // *original* message, so the wrapper text above (rule id + file path) would never be visible
+  // to anything reading `.stack` (e.g. an uncaught-exception logger) — only `.message` would
+  // carry it. `cause` preserves the original error (and its stack) for inspection without
+  // clobbering ours.
+  return new Error(`[oxlint-plugin-graphql] rule "${ruleId}" failed on ${filePath}: ${message}`, {
+    cause: error,
+  });
 }
