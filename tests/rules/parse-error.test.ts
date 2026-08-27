@@ -5,6 +5,7 @@ import { runOxlint } from "../helpers/run-oxlint.js";
 const fixtures = fileURLToPath(new URL("./fixtures/parse-error", import.meta.url));
 const fixturesSmoke = fileURLToPath(new URL("./fixtures/parse-error-smoke", import.meta.url));
 const fixturesMixed = fileURLToPath(new URL("./fixtures/parse-error-mixed", import.meta.url));
+const fixturesMultipleBroken = fileURLToPath(new URL("./fixtures/parse-error-multiple-broken", import.meta.url));
 
 describe("graphql/parse-error", () => {
   const result = runOxlint({ cwd: fixtures, args: ["app.ts"] });
@@ -24,7 +25,7 @@ describe("graphql/parse-error", () => {
 
   it("points at the failing line in the host file", () => {
     const diagnostic = result.diagnostics.find((d) => d.code === "graphql(parse-error)");
-    expect(diagnostic!.labels[0]!.span.line).toBe(3);
+    expect(diagnostic!.labels[0]!.span.line).toBe(4);
   });
 });
 
@@ -62,5 +63,20 @@ describe("graphql/parse-error with mixed broken and valid documents", () => {
   it("only reports the broken document's error once", () => {
     const parseErrors = result.diagnostics.filter((d) => d.code === "graphql(parse-error)");
     expect(parseErrors).toHaveLength(1);
+  });
+});
+
+describe("graphql/parse-error with multiple broken documents", () => {
+  const result = runOxlint({ cwd: fixturesMultipleBroken, args: ["app.ts"] });
+
+  it("reports one error per broken document, not one per file", () => {
+    const parseErrors = result.diagnostics.filter((d) => d.code === "graphql(parse-error)");
+    expect(parseErrors).toHaveLength(2);
+  });
+
+  it("reports both broken documents at their correct host file lines", () => {
+    const parseErrors = result.diagnostics.filter((d) => d.code === "graphql(parse-error)");
+    const lines = parseErrors.map((d) => d.labels[0]!.span.line).sort((a, b) => a - b);
+    expect(lines).toEqual([4, 8]);
   });
 });

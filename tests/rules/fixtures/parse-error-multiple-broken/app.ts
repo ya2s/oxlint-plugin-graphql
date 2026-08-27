@@ -1,10 +1,8 @@
 // @ts-nocheck -- fixture file linted by oxlint, not type-checked; `gql` is not a real import.
-const broken = gql`
-  query User {
+const first = gql`
+  query First {
 `;
 
-const valid = gql`
-  {
-    user
-  }
+const second = gql`
+  mutation Second(
 `;
