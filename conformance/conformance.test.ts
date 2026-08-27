@@ -21,7 +21,7 @@ import {
   renderMismatches,
   renderPerRuleAccounting,
 } from "./report.js";
-import type { CaseResult, CoverageEntry, ExecutionCoverageEntry, FixCaseResult } from "./report.js";
+import type { CaseClassification, CaseResult, CoverageEntry, ExecutionCoverageEntry, FixCaseResult } from "./report.js";
 
 const schemaPath = fileURLToPath(new URL("./fixtures/schema.graphql", import.meta.url));
 const reportPath = fileURLToPath(new URL("./last-run-report.txt", import.meta.url));
@@ -40,8 +40,9 @@ function appendReport(section: string): void {
 
 /** Every case actually run through both engines, from BOTH the derived and supplemental
  *  corpora — populated by `runCase` below. Used by the cross-corpus "execution coverage audit"
- *  at the bottom of this file; each of the two "diagnostics match" describe blocks also keeps
- *  its own local array (for per-corpus reporting) in addition to pushing here. */
+ *  and the "case classification pin" at the bottom of this file; each of the two "diagnostics
+ *  match" describe blocks also keeps its own local array (for per-corpus reporting) in addition
+ *  to pushing here. */
 const combinedResults: CaseResult[] = [];
 
 describe("conformance corpus", () => {
@@ -98,33 +99,134 @@ const EXPECTED_ZERO_EXAMPLE_RULE_IDS = [
   "variables-in-allowed-position",
 ].sort();
 
-/**
- * Pinned exactly (Critical 1 from review): cases excluded before ever getting an `it()`, because
- * `isValidStandaloneGraphQL` found their raw example text doesn't parse as standalone GraphQL
- * (documentation shorthand like `# ...`). Without a pinned list, an upstream graphql-eslint
- * update that makes a NEW example unparsable (or makes one of these newly recovered) would
- * silently change which cases are actually compared while the suite kept reporting "all
- * green" — recomputed independently below and asserted with `toEqual` so any drift fails loudly.
- */
-const EXPECTED_EXCLUDED_CASE_IDS = [
-  "description-style-0",
-  "description-style-1",
-  "naming-convention-1",
-  "naming-convention-4",
-  "naming-convention-9",
-  "no-anonymous-operations-0",
-  "no-anonymous-operations-1",
-  "no-deprecated-1",
-  "require-description-2",
-  "require-field-of-type-query-in-mutation-result-0",
-  "require-field-of-type-query-in-mutation-result-1",
-  "require-type-pattern-with-oneof-0",
-].sort();
-
 /** Pinned (Critical 1): a `KNOWN_DIFFERENCES` entry silently added or removed changes how many
  *  cases are "not-compared" without changing the headline pass rate — pinning the count makes
  *  that a loud, deliberate change instead of a silent one. */
 const EXPECTED_KNOWN_DIFFERENCE_COUNT = 5;
+
+/**
+ * Review round 2, item 1 — the main fix: pins the expected CLASSIFICATION of every one of the
+ * 100 derived corpus case ids (one of "substantive" / "vacuous" / "not-compared" / "excluded";
+ * "mismatch" would appear here too if a case were EXPECTED to disagree, which none currently
+ * are), not just which ones are excluded. The exclusion-only pin from round 1 left a hole the
+ * reviewer demonstrated directly: removing a gated substantive case from the corpus made the
+ * suite report "97 tests, all green" — nothing failed, because nothing asserted that
+ * `alphabetize-0` specifically must exist and must specifically be substantive. This closes that
+ * hole (a case silently leaving the gate now fails, whichever category it was in) and, as a
+ * side effect, also closes the "7 all-vacuous rules have no `toEqual` pin" gap: a rule going
+ * silently all-vacuous after a fixture/schema edit changes entries in this map from
+ * "substantive" to "vacuous", which the `toEqual` below catches.
+ *
+ * Generated mechanically, not hand-typed: dumped from a real run (every derived case actually
+ * executed once, its outcome recorded) and pasted in verbatim — see the task-10 report for the
+ * exact reproduction. That is deliberate, not a shortcut: a graphql-eslint upgrade SHOULD make
+ * this fail. When it does, a human must look at the diff (a case's category changing from
+ * "substantive" to "vacuous" is a real signal something changed, not noise to suppress) and
+ * regenerate this block from a fresh run — re-running the same dump used to build it — rather
+ * than trying to hand-edit individual entries.
+ */
+const EXPECTED_CASE_CLASSIFICATIONS: Record<string, CaseClassification> = {
+  "alphabetize-0": "substantive",
+  "alphabetize-1": "vacuous",
+  "alphabetize-2": "substantive",
+  "alphabetize-3": "vacuous",
+  "alphabetize-4": "substantive",
+  "alphabetize-5": "vacuous",
+  "description-style-0": "excluded",
+  "description-style-1": "excluded",
+  "input-name-0": "substantive",
+  "input-name-1": "vacuous",
+  "input-name-2": "vacuous",
+  "known-directives-0": "vacuous",
+  "known-fragment-names-0": "substantive",
+  "known-fragment-names-1": "vacuous",
+  "known-fragment-names-2": "vacuous",
+  "lone-executable-definition-0": "substantive",
+  "lone-executable-definition-1": "vacuous",
+  "match-document-filename-0": "vacuous",
+  "match-document-filename-1": "vacuous",
+  "match-document-filename-2": "vacuous",
+  "match-document-filename-3": "vacuous",
+  "match-document-filename-4": "vacuous",
+  "match-document-filename-5": "vacuous",
+  "match-document-filename-6": "vacuous",
+  "match-document-filename-7": "vacuous",
+  "naming-convention-0": "substantive",
+  "naming-convention-1": "excluded",
+  "naming-convention-2": "not-compared",
+  "naming-convention-3": "vacuous",
+  "naming-convention-4": "excluded",
+  "naming-convention-5": "not-compared",
+  "naming-convention-6": "vacuous",
+  "naming-convention-7": "not-compared",
+  "naming-convention-8": "not-compared",
+  "naming-convention-9": "excluded",
+  "no-anonymous-operations-0": "excluded",
+  "no-anonymous-operations-1": "excluded",
+  "no-deprecated-0": "vacuous",
+  "no-deprecated-1": "excluded",
+  "no-deprecated-2": "vacuous",
+  "no-duplicate-fields-0": "substantive",
+  "no-duplicate-fields-1": "substantive",
+  "no-duplicate-fields-2": "substantive",
+  "no-hashtag-description-0": "substantive",
+  "no-hashtag-description-1": "vacuous",
+  "no-hashtag-description-2": "vacuous",
+  "no-one-place-fragments-0": "substantive",
+  "no-one-place-fragments-1": "vacuous",
+  "no-root-type-0": "substantive",
+  "no-root-type-1": "vacuous",
+  "no-scalar-result-type-on-mutation-0": "substantive",
+  "no-scalar-result-type-on-mutation-1": "vacuous",
+  "no-typename-prefix-0": "substantive",
+  "no-typename-prefix-1": "vacuous",
+  "no-unreachable-types-0": "substantive",
+  "no-unreachable-types-1": "vacuous",
+  "no-unused-fields-0": "substantive",
+  "no-unused-fields-1": "vacuous",
+  "no-unused-fields-2": "vacuous",
+  "relay-arguments-0": "substantive",
+  "relay-arguments-1": "vacuous",
+  "relay-connection-types-0": "substantive",
+  "relay-connection-types-1": "vacuous",
+  "relay-edge-types-0": "vacuous",
+  "relay-page-info-0": "vacuous",
+  "require-deprecation-date-0": "substantive",
+  "require-deprecation-date-1": "substantive",
+  "require-deprecation-date-2": "substantive",
+  "require-deprecation-reason-0": "substantive",
+  "require-deprecation-reason-1": "substantive",
+  "require-deprecation-reason-2": "vacuous",
+  "require-description-0": "substantive",
+  "require-description-1": "vacuous",
+  "require-description-2": "excluded",
+  "require-description-3": "vacuous",
+  "require-description-4": "not-compared",
+  "require-field-of-type-query-in-mutation-result-0": "excluded",
+  "require-field-of-type-query-in-mutation-result-1": "excluded",
+  "require-import-fragment-0": "substantive",
+  "require-import-fragment-1": "substantive",
+  "require-import-fragment-2": "substantive",
+  "require-import-fragment-3": "substantive",
+  "require-nullable-fields-with-oneof-0": "substantive",
+  "require-nullable-fields-with-oneof-1": "vacuous",
+  "require-nullable-result-in-root-0": "substantive",
+  "require-nullable-result-in-root-1": "vacuous",
+  "require-selections-0": "substantive",
+  "require-selections-1": "vacuous",
+  "require-type-pattern-with-oneof-0": "excluded",
+  "selection-set-depth-0": "substantive",
+  "selection-set-depth-1": "vacuous",
+  "selection-set-depth-2": "vacuous",
+  "strict-id-in-types-0": "substantive",
+  "strict-id-in-types-1": "vacuous",
+  "unique-enum-value-names-0": "substantive",
+  "unique-enum-value-names-1": "vacuous",
+  "unique-fragment-name-0": "vacuous",
+  "unique-fragment-name-1": "vacuous",
+  "unique-operation-name-0": "vacuous",
+  "unique-operation-name-1": "vacuous",
+};
 
 function computeExcludedCaseIds(corpus: CorpusCase[]): string[] {
   return corpus.filter((item) => !isValidStandaloneGraphQL(item.rawCode)).map((item) => item.caseId).sort();
@@ -144,7 +246,17 @@ describe("coverage audit", () => {
   });
 
   it("has exactly the expected set of excluded case ids (fails loudly on drift)", () => {
-    expect(computeExcludedCaseIds(corpus)).toEqual(EXPECTED_EXCLUDED_CASE_IDS);
+    expect(computeExcludedCaseIds(corpus)).toEqual(
+      Object.entries(EXPECTED_CASE_CLASSIFICATIONS)
+        .filter(([, classification]) => classification === "excluded")
+        .map(([caseId]) => caseId)
+        .sort(),
+    );
+  });
+
+  it("has every derived corpus case id accounted for in EXPECTED_CASE_CLASSIFICATIONS (no case is unpinned)", () => {
+    const corpusCaseIds = corpus.map((item) => item.caseId).sort();
+    expect(Object.keys(EXPECTED_CASE_CLASSIFICATIONS).sort()).toEqual(corpusCaseIds);
   });
 
   it("has exactly the expected number of known differences (fails loudly on drift)", () => {
@@ -199,6 +311,17 @@ const FIXABLE_RULE_IDS = new Set(
     .map(([ruleId]) => ruleId),
 );
 
+/** Records a `"skipped"` fix outcome when `item`'s rule is fixable but `runCase` is about to
+ *  return before ever attempting a fix (the diagnostics comparison itself failed first) — review
+ *  round 2, item 3: without this, such cases silently vanished from `fixResults` entirely,
+ *  shrinking the denominator instead of showing up as "attempted but skipped". No-op for
+ *  non-fixable rules. */
+function recordSkippedFix(item: CorpusCase, fixResults: FixCaseResult[], reason: string): void {
+  if (FIXABLE_RULE_IDS.has(item.ruleId)) {
+    fixResults.push({ ruleId: item.ruleId, caseId: item.caseId, outcome: "skipped", detail: reason });
+  }
+}
+
 /**
  * Runs one corpus case (derived or supplemental — same shape, same treatment) through both
  * engines, categorizes the outcome, and — for rules with `meta.fixable` set (only `alphabetize`
@@ -208,7 +331,7 @@ const FIXABLE_RULE_IDS = new Set(
  * Shared between the derived-corpus and supplemental-corpus describe blocks below so both get
  * identical treatment. Pushes into both a per-block `results` array (for that block's own
  * report section) and the module-level `combinedResults` (for the cross-corpus execution
- * coverage audit at the bottom of this file).
+ * coverage audit and classification pin at the bottom of this file).
  */
 function runCase(item: CorpusCase, results: CaseResult[], fixResults: FixCaseResult[]): void {
   const requiresDocuments = RULES_REQUIRING_DOCUMENTS.has(item.ruleId);
@@ -250,6 +373,7 @@ function runCase(item: CorpusCase, results: CaseResult[], fixResults: FixCaseRes
       ).toBe(eslintCore);
     }
     record({ ruleId: item.ruleId, caseId: item.caseId, category: "not-compared", detail: `known difference: ${known.reason}` });
+    recordSkippedFix(item, fixResults, "diagnostics comparison is a documented known-difference (both-errored) — no diagnostics to fix");
     return;
   }
 
@@ -263,6 +387,7 @@ function runCase(item: CorpusCase, results: CaseResult[], fixResults: FixCaseRes
       category: "not-compared",
       detail: `UNDOCUMENTED (both sides threw): eslint=${comparison.eslintMessage} oxlint=${comparison.oxlintMessage}`,
     });
+    recordSkippedFix(item, fixResults, "diagnostics comparison failed first (undocumented both-errored)");
     expect.fail(
       `both engines threw instead of producing diagnostics, and this case is not in known-differences.ts — not evidence of parity: eslint="${comparison.eslintMessage}" oxlint="${comparison.oxlintMessage}"`,
     );
@@ -271,6 +396,7 @@ function runCase(item: CorpusCase, results: CaseResult[], fixResults: FixCaseRes
 
   if (comparison.status === "kind-mismatch") {
     record({ ruleId: item.ruleId, caseId: item.caseId, category: "mismatch" });
+    recordSkippedFix(item, fixResults, "diagnostics comparison failed first (kind-mismatch: one side errored, the other produced diagnostics)");
     expect.fail(
       `one side errored and the other produced diagnostics: eslint=${JSON.stringify(eslintOutcome)} oxlint=${JSON.stringify(oxlintOutcome)}`,
     );
@@ -279,6 +405,7 @@ function runCase(item: CorpusCase, results: CaseResult[], fixResults: FixCaseRes
 
   if (comparison.status === "mismatch") {
     record({ ruleId: item.ruleId, caseId: item.caseId, category: "mismatch" });
+    recordSkippedFix(item, fixResults, "diagnostics comparison failed first (diagnostics differ between engines)");
     expect(oxlintOutcome).toEqual(eslintOutcome);
     return;
   }
@@ -295,14 +422,33 @@ function runCase(item: CorpusCase, results: CaseResult[], fixResults: FixCaseRes
     const eslintFixed = fixWithEslint({ dir: eslintFixture.dir, ruleId: item.ruleId, options: item.options });
     const oxlintFixture = buildFixture({ code: item.code, schemaPath, requiresDocuments, schemaOverrideText });
     const oxlintFixed = fixWithOxlint({ dir: oxlintFixture.dir, ruleId: item.ruleId, options: item.options });
-    const passed = eslintFixed === oxlintFixed;
-    fixResults.push({
-      ruleId: item.ruleId,
-      caseId: item.caseId,
-      passed,
-      detail: passed ? undefined : "eslint fixed output and oxlint fixed output differ byte-for-byte",
-    });
-    expect(oxlintFixed, `autofix output differs for ${item.caseId}`).toBe(eslintFixed);
+
+    if (eslintFixed !== oxlintFixed) {
+      fixResults.push({
+        ruleId: item.ruleId,
+        caseId: item.caseId,
+        outcome: "mismatch",
+        detail: "eslint fixed output and oxlint fixed output differ byte-for-byte",
+      });
+      expect(oxlintFixed, `autofix output differs for ${item.caseId}`).toBe(eslintFixed);
+    } else if (comparison.status === "equal-vacuous") {
+      // Review round 2, item 4: zero diagnostics means zero fixes SHOULD be applied — verify
+      // that's actually what happened (both engines left the file untouched), rather than just
+      // "both engines agree", which a fixer that always no-ops would also satisfy.
+      fixResults.push({ ruleId: item.ruleId, caseId: item.caseId, outcome: "noop-match" });
+      expect(eslintFixed, `case "${item.caseId}" has zero diagnostics — expected no fix, but the file changed`).toBe(item.code);
+    } else {
+      // Substantive: a real diagnostic was reported, so a real fix is expected. Assert the fixed
+      // text actually differs from the input — otherwise a regression that silently stopped
+      // applying fixes (both engines "fixing" by doing nothing) would read as a pass, since
+      // `eslintFixed === oxlintFixed` alone can't distinguish "both fixed it the same way" from
+      // "both did nothing".
+      fixResults.push({ ruleId: item.ruleId, caseId: item.caseId, outcome: "fixed-match" });
+      expect(
+        eslintFixed,
+        `case "${item.caseId}" reported a real diagnostic — expected a fix to change the file, but it is byte-identical to the input`,
+      ).not.toBe(item.code);
+    }
   }
 }
 
@@ -316,8 +462,8 @@ describe("diagnostics match graphql-eslint", () => {
     // Bucket (ii) corpus artifact, not a rule under test: the example's own GraphQL doesn't
     // parse standalone (documentation shorthand like `# ...`), so both engines would fail for
     // reasons unrelated to the rule being compared. Recorded, not silently dropped — see the
-    // "excluded" table below, and see `EXPECTED_EXCLUDED_CASE_IDS` above for why the set itself
-    // can't silently grow or shrink.
+    // "excluded" table below, and see `EXPECTED_CASE_CLASSIFICATIONS` above for why the set
+    // itself (and every other case's category) can't silently drift.
     if (!isValidStandaloneGraphQL(item.rawCode)) {
       excluded.push({
         ruleId: item.ruleId,
@@ -350,7 +496,8 @@ describe("diagnostics match graphql-eslint", () => {
  * Hand-written cases (see supplemental-corpus.ts) for rules whose entire mechanically-derived
  * contribution is excluded — kept in a wholly separate describe block/table so the derived
  * corpus's "these numbers come straight from graphql-eslint's own docs" claim stays true; these
- * four rules' numbers are never folded into the derived-corpus accounting above.
+ * four rules' numbers are never folded into the derived-corpus accounting above, and are NOT
+ * part of `EXPECTED_CASE_CLASSIFICATIONS` (that pin is derived-corpus only, by design).
  */
 describe("diagnostics match graphql-eslint (supplemental corpus)", () => {
   const supplemental = buildSupplementalCorpus();
@@ -420,7 +567,35 @@ describe("execution coverage audit", () => {
       diagnosticProducingCaseCount: diagnosticProducingByRule.get(ruleId) ?? 0,
     }));
     appendReport("=== Execution & diagnostic-producing coverage audit ===\n" + renderExecutionCoverage(entries));
+  });
+});
 
+/**
+ * Review round 2, item 1: the actual pin assertion. Reads `combinedResults` (populated by the
+ * "diagnostics match graphql-eslint" describe block above — see the ordering note on that
+ * block/on `combinedResults` itself) plus the excluded-case-id list, builds the ACTUAL
+ * classification of every derived case id, and asserts it equals `EXPECTED_CASE_CLASSIFICATIONS`
+ * exactly. This is the describe block that fails when a case is removed from, renamed in, or
+ * silently reclassified within the corpus — the hole the round-1 exclusion-only pin left open.
+ */
+describe("case classification pin", () => {
+  const derived = buildCorpus();
+  const derivedCaseIds = new Set(derived.map((item) => item.caseId));
+  const excludedCaseIds = new Set(computeExcludedCaseIds(derived));
+
+  it("every derived case's actual classification matches the pinned expectation", () => {
+    const actual: Record<string, CaseClassification> = {};
+    for (const caseId of excludedCaseIds) {
+      actual[caseId] = "excluded";
+    }
+    for (const result of combinedResults) {
+      if (!derivedCaseIds.has(result.caseId)) continue; // supplemental-corpus result, not part of this pin
+      actual[result.caseId] = result.category;
+    }
+    expect(actual).toEqual(EXPECTED_CASE_CLASSIFICATIONS);
+  });
+
+  afterAll(() => {
     const fullReport = reportSections.join("\n\n");
     writeFileSync(reportPath, fullReport, "utf8");
     // Important 3: guaranteed visible even without --reporter=verbose (console.log from a
