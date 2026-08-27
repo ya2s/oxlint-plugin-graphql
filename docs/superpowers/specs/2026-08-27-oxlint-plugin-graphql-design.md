@@ -217,7 +217,7 @@ src/
 
 - パッケージ名: `oxlint-plugin-graphql`（公式の `oxlint-plugin-eslint` と同じ命名規約）。
 - `engines.node`: `>=22.12.0`。oxlint の下限に揃え、EOL の Node 20 を落とす。
-  開発環境（`.node-version`）は Active LTS の v24。CI マトリクスは 22.12 / 24 / 26。
+  開発環境（`.node-version`）は Active LTS の v24。CI マトリクスは 22.13 / 24 / 26。
 - ESM のみ。TypeScript で実装し、ビルドは **tsdown**（内部で rolldown 1.2 と
   rolldown-plugin-dts を使用。d.ts 生成と exports 整合を設定ゼロで得るため）。
 - 依存:
@@ -248,3 +248,14 @@ src/
 5. `oxlint/plugins-dev` の `RuleTester` が `loc` ベースの report を検証できること。
 6. oxlint の suggestion の受け渡し形状が graphql-eslint の suggestion と対応づけられること。
 7. 実プロジェクト規模での性能（LRU キャッシュが効いていること、スキーマロードが 1 回で済むこと）。
+
+## 12. 実装中に確定した訂正（2026-08-28 追記）
+
+- `engines.node` は `">=22.13.0"`。当初 `">=22.12.0"` としていたが、リポジトリが固定する pnpm 11.24.0 が
+  Node 22.13 未満を拒否するため、22.12 は CI で一度も検証できない。宣言する下限は CI が実際に
+  実行できる値と一致させる方針で 22.13 に引き上げた。ビルドツールの tsdown はさらに上の
+  `^22.18.0 || >=24.11.0` を要求し、下回ると実際にクラッシュするため、CI はビルドを Node 24 の
+  専用ジョブに分離し、テストマトリクス（22.13 / 24 / 26）はその成果物を消費する。
+- dependencies は `@oxlint/plugins` と `esquery`（第 10 節の記述を参照）。
+- graphql-config の `documents` を要求して例外を投げるルールは 10 件（無条件 7 件＋
+  未解決の fragment spread がある場合のみの 3 件）。第 3 節・第 9 節の関連記述はこの値で読むこと。

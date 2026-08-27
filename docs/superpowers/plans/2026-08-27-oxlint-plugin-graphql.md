@@ -12,7 +12,7 @@
 
 ## Global Constraints
 
-- `engines.node`: `">=22.12.0"`。開発環境（`.node-version`）は 24。CI マトリクスは 22.12 / 24 / 26。
+- `engines.node`: `">=22.13.0"`。開発環境（`.node-version`）は 24。CI マトリクスは 22.13 / 24 / 26。
 - ESM のみ。CJS 出力は作らない。
 - ビルドは tsdown。`typescript` は `^7.0.0` を使う。rolldown-plugin-dts が TS 7 で失敗する場合のみ `^5.9.0` に下げる（その判断は Task 1 で行い、決めた側を package.json に固定する）。
 - dependencies は `@oxlint/plugins` と `esquery`。`@graphql-eslint/eslint-plugin` と `graphql` は peerDependencies。`eslint` は devDependencies のみ（conformance の参照実装用）で、runtime 依存に入れない。
@@ -60,7 +60,7 @@ oxlint 側の前提（`loc` 基準、`settings`、`Program` 発火、`--fix` の
   "description": "Run @graphql-eslint/eslint-plugin rules on oxlint",
   "license": "MIT",
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": { "node": ">=22.13.0" },
   "packageManager": "pnpm@11.24.0",
   "files": ["dist"],
   "exports": {
@@ -123,7 +123,7 @@ export default defineConfig({
   format: ["esm"],
   dts: true,
   clean: true,
-  target: "node22.12",
+  target: "node22.13",
 });
 ```
 
