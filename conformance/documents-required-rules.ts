@@ -65,5 +65,18 @@ export const RULES_REQUIRING_DOCUMENTS: ReadonlySet<string> = new Set([
  * `OperationDefinition` mixed into the same text (verified directly against `graphql-js`:
  * `buildSchema` only reads the type-system definitions) — so the exact same text serves as both
  * the embedded document (via `toEmbedded`) and the schema.
+ *
+ * `no-unreachable-types` has the same shape for a different reason: it walks
+ * `requireGraphQLSchema`'s schema itself (not the document under lint) looking for types no root
+ * type can reach, and both its examples embed a complete miniature `Query`/`User` schema whose
+ * reachability is exactly what the example is illustrating. Checked against the shared
+ * conformance schema (where `User` is already reachable via `Query.user`), the example's
+ * `User`/`Query.me: String` never triggers the rule's real logic — comparing genuinely equal but
+ * *vacuous* zero-diagnostics on both sides instead of the rule's actual "Incorrect" diagnostic.
+ * Verified directly: giving it its own example text as `schema.graphql` converts
+ * `no-unreachable-types-0` into a genuine, non-vacuous matching comparison.
  */
-export const RULES_WITH_SELF_SCHEMA_EXAMPLES: ReadonlySet<string> = new Set(["no-unused-fields"]);
+export const RULES_WITH_SELF_SCHEMA_EXAMPLES: ReadonlySet<string> = new Set([
+  "no-unused-fields",
+  "no-unreachable-types",
+]);

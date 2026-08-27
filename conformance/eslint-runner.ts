@@ -35,15 +35,21 @@
  * mismatch is purely an artifact of `Linter.verify` accepting a relative filename — fixed by
  * resolving `app.ts` to an absolute path here, matching how oxlint already reports
  * `physicalFilename`.
+ *
+ * `--fix` mode (a 4th argv, "fix"): runs `Linter#verifyAndFix` instead of `verify`, and prints
+ * `{ kind: "fixed", output }`. `verifyAndFix` is ESLint's own multi-pass autofix loop (re-lints
+ * and reapplies non-conflicting fixes up to 10 times until stable), the same mechanism the real
+ * `eslint --fix` CLI flag uses — see run-oxlint.ts's `fixWithOxlint` for why the oxlint side
+ * needs its own repeated-invocation loop to reach the same converged result.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { Linter } from "eslint";
 import graphqlEslintNS from "@graphql-eslint/eslint-plugin";
 
-const [, , ruleId, optionsJson] = process.argv;
+const [, , ruleId, optionsJson, mode] = process.argv;
 if (!ruleId || optionsJson === undefined) {
-  throw new Error("usage: eslint-runner.ts <ruleId> <optionsJson>");
+  throw new Error("usage: eslint-runner.ts <ruleId> <optionsJson> [fix]");
 }
 const options: unknown[] = JSON.parse(optionsJson);
 const code = readFileSync("app.ts", "utf8");
@@ -54,27 +60,31 @@ const pluginObj = {
   rules: graphqlEslintNS.rules,
 };
 
+const config = [
+  {
+    files: ["**/*.ts"],
+    plugins: { "@graphql-eslint": pluginObj as never },
+    processor: "@graphql-eslint/graphql",
+  },
+  {
+    files: ["**/*.graphql"],
+    languageOptions: { parser: graphqlEslintNS.parser as never },
+    plugins: { "@graphql-eslint": pluginObj as never },
+    rules: { [`@graphql-eslint/${ruleId}`]: ["error", ...options] as never },
+  },
+];
+
 const linter = new Linter({ configType: "flat" });
+const verifyOptions = { filename: resolve("app.ts"), filterCodeBlock: () => true };
 
 try {
-  const messages = linter.verify(
-    code,
-    [
-      {
-        files: ["**/*.ts"],
-        plugins: { "@graphql-eslint": pluginObj as never },
-        processor: "@graphql-eslint/graphql",
-      },
-      {
-        files: ["**/*.graphql"],
-        languageOptions: { parser: graphqlEslintNS.parser as never },
-        plugins: { "@graphql-eslint": pluginObj as never },
-        rules: { [`@graphql-eslint/${ruleId}`]: ["error", ...options] as never },
-      },
-    ],
-    { filename: resolve("app.ts"), filterCodeBlock: () => true },
-  );
-  process.stdout.write(JSON.stringify({ kind: "messages", messages }));
+  if (mode === "fix") {
+    const result = linter.verifyAndFix(code, config, verifyOptions);
+    process.stdout.write(JSON.stringify({ kind: "fixed", output: result.output }));
+  } else {
+    const messages = linter.verify(code, config, verifyOptions);
+    process.stdout.write(JSON.stringify({ kind: "messages", messages }));
+  }
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   process.stdout.write(JSON.stringify({ kind: "error", message }));

@@ -20,13 +20,24 @@ export type OxlintResult = {
   exitCode: number;
 };
 
-export function runOxlint(options: { cwd: string; args?: string[] }): OxlintResult {
+export function runOxlint(options: {
+  cwd: string;
+  args?: string[];
+  /** Overrides the child process's environment. Defaults to inheriting `process.env`
+   *  unchanged (Node's own default when `env` is omitted from `execFileSync` options), so
+   *  existing callers are unaffected. */
+  env?: NodeJS.ProcessEnv;
+}): OxlintResult {
   const args = ["-c", ".oxlintrc.json", "-f", "json", ...(options.args ?? ["."])];
   let stdout = "";
   let stderr = "";
   let exitCode = 0;
   try {
-    stdout = execFileSync(OXLINT_BIN, args, { cwd: options.cwd, encoding: "utf8" });
+    stdout = execFileSync(OXLINT_BIN, args, {
+      cwd: options.cwd,
+      encoding: "utf8",
+      env: options.env ?? process.env,
+    });
   } catch (error) {
     const err = error as { stdout?: string; stderr?: string; status?: number };
     stdout = err.stdout ?? "";

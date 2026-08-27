@@ -41,9 +41,24 @@ export function buildCorpus(): CorpusCase[] {
   return cases;
 }
 
-/** examples の GraphQL を JS の gql テンプレートに埋め込む。両経路で同じ入力を使うため。 */
+/**
+ * examples の GraphQL を JS の gql テンプレートに埋め込む。両経路で同じ入力を使うため。
+ *
+ * A handful of examples (relay-connection-types, require-selections) include a literal backtick
+ * inside a comment, used as markdown-style code formatting in the docs (e.g. `` `Connection` ``
+ * suffix). Embedded verbatim inside a `` gql`...` `` JS template literal, that backtick would
+ * prematurely close the template — breaking the *host* `.ts` file's own JS syntax, not the
+ * GraphQL inside it. These are escaped (`` ` `` → `` \` ``) rather than excluded from the corpus:
+ * a backslash-escaped backtick inside a template literal evaluates back to a literal backtick in
+ * the template's *cooked* value, so `@graphql-tools/graphql-tag-pluck` (which reads the cooked
+ * string, not the raw source) recovers the exact original GraphQL text — verified directly:
+ * relay-connection-types-0, escaped this way, produces an identical real diagnostic on both
+ * engines. `\` and `${` are escaped defensively for the same reason, even though no current
+ * example contains either.
+ */
 export function toEmbedded(graphql: string): string {
-  return `const doc = gql\`\n${graphql.trimEnd()}\n\`;\n`;
+  const escaped = graphql.replace(/\\/g, "\\\\").replace(/`/g, "\\`").replace(/\$\{/g, "\\${");
+  return `const doc = gql\`\n${escaped.trimEnd()}\n\`;\n`;
 }
 
 /**
@@ -63,19 +78,4 @@ export function isValidStandaloneGraphQL(code: string): boolean {
   } catch {
     return false;
   }
-}
-
-/**
- * A handful of examples (relay-connection-types, require-selections) include a literal backtick
- * inside a comment, used as markdown-style code formatting in the docs (e.g. `` `Connection` ``
- * suffix). Embedded verbatim inside a `` gql`...` `` JS template literal (see `toEmbedded`), that
- * backtick prematurely closes the template — breaking the *host* `.ts` file's own JS syntax, not
- * the GraphQL inside it. Measured directly: ESLint's own JS parser then reports an unrelated
- * "Unexpected token" parse error, while oxlint's JS/TS parser rejects the same malformed source
- * as an unrecoverable crash — two different failure *shapes* for the same root cause, neither of
- * which has anything to do with the rule under test. Detected mechanically by checking for the
- * literal character, not by naming the specific examples.
- */
-export function canEmbedInJsTemplate(code: string): boolean {
-  return !code.includes("`");
 }

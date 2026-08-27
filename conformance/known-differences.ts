@@ -75,3 +75,33 @@ export const KNOWN_DIFFERENCES: readonly KnownDifference[] = [
 export function findKnownDifference(ruleId: string, caseId: string): KnownDifference | undefined {
   return KNOWN_DIFFERENCES.find((d) => d.ruleId === ruleId && (d.caseId === undefined || d.caseId === caseId));
 }
+
+/**
+ * Strips everything that legitimately differs between the two engines' error text — absolute
+ * paths, this adapter's own `[oxlint-plugin-graphql] rule "X" failed on <path>:` prefix and
+ * stack trace, ESLint's `\nOccurred while linting <path>...` tail — down to the underlying JS
+ * error's own message, so a `KnownDifference` can assert the two sides threw for the *same*
+ * reason, not merely that both threw.
+ *
+ * One more wrinkle, found while verifying `require-description-4`: when the underlying failure
+ * is an esquery selector-parse error, ESLint's own listener registration (in
+ * `createRuleListeners`/`NodeEventGenerator`) wraps it as
+ * `Syntax error in selector "<selector>" at position N: <core>` *before* ESLint ever gets to
+ * append its own `Occurred while linting` tail — this plugin's `selectors.ts` throws the same
+ * esquery library's error directly, with no such wrapper. That prefix is stripped too, on
+ * whichever side has it.
+ */
+export function extractCoreErrorMessage(raw: string): string {
+  let core: string;
+  const oxlintWithStack = raw.match(/rule "[^"]+" failed on .*?: ([\s\S]*?)\n\s+at /);
+  const oxlintNoStack = raw.match(/rule "[^"]+" failed on .*?: ([\s\S]*)$/);
+  if (oxlintWithStack) {
+    core = oxlintWithStack[1]!;
+  } else if (oxlintNoStack) {
+    core = oxlintNoStack[1]!;
+  } else {
+    const occurredIndex = raw.indexOf("\nOccurred while linting");
+    core = occurredIndex === -1 ? raw : raw.slice(0, occurredIndex);
+  }
+  return core.trim().replace(/^Syntax error in selector ".*?" at position \d+: /, "");
+}

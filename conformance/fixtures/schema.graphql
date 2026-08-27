@@ -9,6 +9,12 @@ type Mutation {
   createUser(input: CreateUserInput!): CreateUserPayload
   deleteUser(id: ID!): Boolean
   addAlert: Boolean
+  # Deliberately missing a field of type Query, unlike CreateUserPayload — used by the
+  # require-field-of-type-query-in-mutation-result supplemental case (see
+  # conformance/supplemental-corpus.ts). Safe to add: every other corpus case that redeclares
+  # `type Mutation` in its own embedded document only enables its own rule, never this one, so
+  # this field is inert for them.
+  renameUser(id: ID!, name: String!): RenameUserPayload
 }
 
 type Subscription {
@@ -26,6 +32,10 @@ input CreateUserInput {
 type CreateUserPayload {
   user: User
   query: Query
+}
+
+type RenameUserPayload {
+  user: User
 }
 
 type User implements Node {
