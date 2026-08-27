@@ -1,0 +1,13 @@
+{
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "jsPlugins": ["../../../../dist/index.js"],
+  "settings": {
+    "graphql": {
+      "schemaSdl": "type Query { user: User }\ntype User { id: ID! name: String @deprecated(reason: \"use fullName instead\") fullName: String }"
+    }
+  },
+  "rules": {
+    "graphql/no-deprecated": "error"
+  }
+}
