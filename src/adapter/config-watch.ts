@@ -1,0 +1,135 @@
+/**
+ * Keeps `parseDocuments`'s own cache (parse.ts) honest in a long-lived process: without this, a
+ * schema or graphql-config edit is invisible to it forever, since the cache is keyed only by
+ * `filePath`/`code`/`schemaSdl`, none of which change when a *different* file on disk changes.
+ *
+ * Known limitation, not fixed by this module (carry forward to Task 13's README "known
+ * limitations" section): if graphql.config.* itself is edited so that it points at a *different*
+ * schema file (its `schema` pointer changes, a `projects` entry is added/removed/renamed, or the
+ * config file is moved), the language server must be restarted to pick it up. This fingerprint
+ * does detect that edit (the config file's own mtime is always included) and correctly clears
+ * this module's cache -- but `@graphql-eslint/eslint-plugin`'s OWN module-level `graphQLConfig`
+ * singleton (esm/graphql-config.js) is never rebuilt within a process once set, so the next real
+ * parse still asks the *stale* GraphQLConfig object for the file's project, which still returns
+ * the *old* schema pointer. Verified directly: even 11+ seconds after such an edit, in a process
+ * that never restarts, the old schema is still what gets used.
+ *
+ * By contrast, an edit to the *content* of an already-configured schema file (same path, new
+ * text) does NOT need a restart: `@graphql-eslint/eslint-plugin`'s separate schema cache
+ * (esm/cache.js's `ModuleCache`, used by esm/schema.js) expires 10 seconds after each load
+ * regardless of `NODE_ENV`, so once this module's own cache-clear lets a fresh parse through, the
+ * next parse after that ~10s window reads the new schema automatically. See
+ * tests/adapter/config-watch.test.ts's "re-reads the schema" test and Task 11's report for the
+ * measurements behind both claims, including why re-importing graphql-eslint's parser module
+ * with a cache-busting query string (an approach considered for defeating the singleton
+ * outright) does not work.
+ */
+import { existsSync, readFileSync, statSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+
+const CONFIG_FILE_NAMES = [
+  "graphql.config.ts",
+  "graphql.config.js",
+  "graphql.config.mjs",
+  "graphql.config.cjs",
+  "graphql.config.json",
+  "graphql.config.yaml",
+  "graphql.config.yml",
+  ".graphqlrc",
+  ".graphqlrc.ts",
+  ".graphqlrc.js",
+  ".graphqlrc.json",
+  ".graphqlrc.yaml",
+  ".graphqlrc.yml",
+  "package.json",
+];
+
+const fingerprints = new Map<string, string>();
+
+/**
+ * A fingerprint of `filePath`'s graphql-config and the schema file(s) it points at, built from
+ * mtimes only (no parsing). Two calls return the same string iff nothing relevant on disk has
+ * changed since. See `invalidateIfConfigChanged`, the only real consumer: it stores the previous
+ * fingerprint per directory and clears the parse cache when this changes.
+ */
+export function getConfigFingerprint(filePath: string): string {
+  const parts: string[] = [];
+
+  for (const configPath of findConfigFiles(filePath)) {
+    parts.push(`${configPath}:${mtime(configPath)}`);
+    for (const schemaPath of schemaFilesOf(configPath)) {
+      parts.push(`${schemaPath}:${mtime(schemaPath)}`);
+    }
+  }
+
+  return parts.join("|");
+}
+
+/**
+ * Calls `onChange` (expected to clear the parse cache) the first time this is called for a given
+ * directory, and again whenever `getConfigFingerprint` for `filePath` differs from the last
+ * value seen for that directory. Safe to call on every `parseDocuments` invocation: the common
+ * case (nothing changed) is just an mtime comparison.
+ */
+export function invalidateIfConfigChanged(filePath: string, onChange: () => void): void {
+  const key = dirname(resolve(filePath));
+  const current = getConfigFingerprint(filePath);
+  if (fingerprints.get(key) !== current) {
+    fingerprints.set(key, current);
+    onChange();
+  }
+}
+
+function findConfigFiles(filePath: string): string[] {
+  let dir = dirname(resolve(filePath));
+  const found: string[] = [];
+
+  for (;;) {
+    for (const name of CONFIG_FILE_NAMES) {
+      const candidate = join(dir, name);
+      if (existsSync(candidate)) found.push(candidate);
+    }
+    if (found.length > 0) return found;
+
+    const parent = dirname(dir);
+    if (parent === dir) return found;
+    dir = parent;
+  }
+}
+
+/**
+ * Scans a config file's raw text for quoted paths ending in a schema-like extension. Crude by
+ * design: a real parse would need to run each config loader (JS/TS/JSON/YAML) and resolve
+ * graphql-config's own project/extends semantics, all of which this function must stay fast and
+ * synchronous enough to run on every parse. It undershoots (glob patterns like
+ * `"./schema/**\/*.graphql"` never resolve to any `existsSync` candidate, so a schema split
+ * across multiple files via a glob is invisible to this fingerprint) but does not overshoot: a
+ * false-negative here just means the LSP falls back to graphql-eslint's own eventual cache
+ * expiry (see the report) rather than reacting to the edit right away; it never fingerprints an
+ * unrelated file.
+ */
+function schemaFilesOf(configPath: string): string[] {
+  let content: string;
+  try {
+    content = statSync(configPath).isFile() ? readFileSync(configPath, "utf8") : "";
+  } catch {
+    return [];
+  }
+
+  const matches = content.matchAll(/["'`]([^"'`\s]+\.(?:graphql|graphqls|gql|json))["'`]/g);
+  const dir = dirname(configPath);
+  const paths: string[] = [];
+  for (const match of matches) {
+    const candidate = resolve(dir, match[1]!);
+    if (existsSync(candidate)) paths.push(candidate);
+  }
+  return paths;
+}
+
+function mtime(path: string): number {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return 0;
+  }
+}

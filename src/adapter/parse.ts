@@ -1,4 +1,5 @@
 import { parseForESLint } from "@graphql-eslint/eslint-plugin";
+import { invalidateIfConfigChanged } from "./config-watch.js";
 import { extractDocuments } from "./documents.js";
 import { linkParents } from "./traverse.js";
 import type { GqlNode, ParseError, ParsedDocument, ParserServices } from "./types.js";
@@ -24,6 +25,12 @@ export function parseDocuments(options: {
   filePath: string;
   schemaSdl?: string;
 }): ParsedDocument[] {
+  // A long-lived process (the oxc language server) can outlive edits to graphql.config.* or the
+  // schema files it points at. Neither is reflected in `code`/`schemaSdl`, the only inputs the
+  // cache below is keyed on, so without this the cache would keep returning parses against a
+  // schema that no longer matches disk. See config-watch.ts.
+  invalidateIfConfigChanged(options.filePath, () => cache.clear());
+
   const cached = cache.get(options.filePath);
   if (cached && cached.code === options.code && cached.schemaSdl === options.schemaSdl) {
     cache.delete(options.filePath);
