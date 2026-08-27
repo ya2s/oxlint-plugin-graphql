@@ -45,7 +45,7 @@ export function parseDocuments(options: {
         options.schemaSdl === undefined
           ? { filePath: document.filePath }
           : { filePath: document.filePath, schemaSdl: options.schemaSdl };
-      const result = parseForESLint(document.text, parserOptions) as unknown as {
+      const result = parseForESLintDefeatingNodeCacheBypass(document.text, parserOptions) as unknown as {
         ast: GqlNode;
         services: ParserServices;
       };
@@ -65,6 +65,42 @@ export function parseDocuments(options: {
     if (!oldest.done) cache.delete(oldest.value);
   }
   return documents;
+}
+
+/**
+ * Workaround for `@graphql-eslint/eslint-plugin@4.4.1`'s `esm/cache.js` (`ModuleCache.get`):
+ *
+ *   if (process.env.NODE || process.hrtime(lastSeen)[0] < settings.lifetime) return result;
+ *
+ * This gates the plugin's schema cache's 10-second TTL behind `process.env.NODE` — almost
+ * certainly an upstream typo for `NODE_ENV` (compare the correct `process.env.NODE_ENV` checks
+ * elsewhere in the same package, e.g. graphql-config.js). Whenever `NODE` is set to any truthy
+ * string, the `||` short-circuits and the schema cache never expires, for the life of the
+ * process. `pnpm run <script>`/`pnpm exec` always set a bare `NODE` env var to the node binary
+ * path, so a language server launched that way (a very common launch path in a pnpm-managed
+ * project) would never see a schema-content edit — regardless of invalidateIfConfigChanged
+ * clearing THIS package's own cache — until the process restarts. Verified directly: see
+ * tests/adapter/config-watch.test.ts's "re-reads the schema ... with NODE set" test and Task
+ * 11's report.
+ *
+ * `parseForESLint` is synchronous, so it's safe to save, delete, and restore `process.env.NODE`
+ * around just this one call: nothing else in the process can observe the mutation mid-call, and
+ * the `finally` guarantees restoration even if `parseForESLint` throws.
+ *
+ * Delete this workaround if upstream fixes the typo (i.e. once `esm/cache.js` no longer checks
+ * `process.env.NODE`).
+ */
+function parseForESLintDefeatingNodeCacheBypass(
+  ...args: Parameters<typeof parseForESLint>
+): ReturnType<typeof parseForESLint> {
+  const hadNode = Object.hasOwn(process.env, "NODE");
+  const savedNode = process.env.NODE;
+  delete process.env.NODE;
+  try {
+    return parseForESLint(...args);
+  } finally {
+    if (hadNode) process.env.NODE = savedNode;
+  }
 }
 
 function toParseError(error: unknown): ParseError {

@@ -9,7 +9,7 @@ export type StalenessResult = { first: string[]; second: string[] };
 /**
  * Spawns tests/adapter/support/parse-staleness-runner.ts in a fresh `node` subprocess with
  * `NODE_ENV=production` pinned (see that file's doc comment for why this must be a subprocess,
- * not an in-process vitest call), and `NODE` deliberately unset.
+ * not an in-process vitest call).
  *
  * `NODE` matters for a completely different, surprising reason from `NODE_ENV`: `pnpm run <script>`
  * (which is how this very test suite gets invoked by `pnpm test`) sets a bare `NODE` env var to
@@ -17,23 +17,32 @@ export type StalenessResult = { first: string[]; second: string[] };
  * from inside a test. `@graphql-eslint/eslint-plugin`'s schema cache (esm/cache.js's
  * `ModuleCache.get`) has `if (process.env.NODE || process.hrtime(lastSeen)[0] < settings.lifetime)
  * return result;` -- so when `NODE` is set to any truthy string (regardless of its value), the
- * `10-second lifetime` on the right of `||` is never even evaluated: the cached schema is returned
- * forever, no matter how much real time passes. Verified directly: the exact same scenario that
- * self-heals after 11s under a plain shell invocation stays stale forever once `NODE` is set.
- * Deleting `NODE` here keeps this test's outcome about the fix this task actually makes (clearing
- * OUR OWN cache), not about which shell happened to launch the test. See the report for why this
- * also means a real language server started via `pnpm exec`/`pnpm run` (common in monorepo
- * tooling) can NOT rely on graphql-eslint's own cache expiring at all, ever, for as long as it
- * keeps that inherited `NODE` variable.
+ * `10-second lifetime` on the right of `||` is never even evaluated: the cached schema would be
+ * returned forever, no matter how much real time passes, WERE IT NOT for the workaround in
+ * parse.ts's `parseForESLintDefeatingNodeCacheBypass` (see that function's doc comment), which
+ * neutralizes `process.env.NODE` around each synchronous `parseForESLint` call.
+ *
+ * By default (`nodeEnvValue` omitted) this deletes `NODE` from the spawned env entirely, so a
+ * test's outcome reflects only `invalidateIfConfigChanged` (this package's own cache fix),
+ * independent of whether the workaround above also happens to be doing its job. Pass
+ * `nodeEnvValue` (e.g. the current `process.execPath`, mirroring what pnpm actually sets it to)
+ * to force `NODE` to be set for the whole life of the subprocess -- i.e. to simulate a language
+ * server launched via `pnpm exec`/`pnpm run` -- and specifically exercise the workaround.
  *
  * `waitMs` is the delay the runner waits, inside its single long-lived process, between editing
  * the schema file and calling `parseDocuments` a second time. Pass 0 to observe the state
  * immediately after the edit; pass something past `@graphql-eslint/eslint-plugin`'s own 10-second
  * schema-cache TTL to observe the state once that cache would have expired on its own.
  */
-export function runParseStalenessScenario(input: { projectDir: string; schemaPath: string; waitMs: number }): StalenessResult {
+export function runParseStalenessScenario(input: {
+  projectDir: string;
+  schemaPath: string;
+  waitMs: number;
+  nodeEnvValue?: string;
+}): StalenessResult {
   const { NODE: _unusedNode, ...restEnv } = process.env;
-  const env = { ...restEnv, NODE_ENV: "production" };
+  const env: NodeJS.ProcessEnv = { ...restEnv, NODE_ENV: "production" };
+  if (input.nodeEnvValue !== undefined) env.NODE = input.nodeEnvValue;
 
   const stdout = execFileSync(
     process.execPath,

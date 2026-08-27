@@ -64,13 +64,17 @@ describe("parseDocuments in a long-lived process", () => {
   //
   // `@graphql-eslint/eslint-plugin` also has a second, independent cache: `esm/cache.js`'s
   // `ModuleCache`, used by `esm/schema.js` to memoize the loaded `GraphQLSchema` for up to 10
-  // seconds regardless of `NODE_ENV`. That means a schema edit becomes visible to a fresh
-  // `parseDocuments` call as soon as invalidateIfConfigChanged clears OUR cache, but the actual
-  // graphql-eslint internals underneath can still serve the old schema object for up to 10s
-  // after it was first loaded. This test waits 11s past the edit so both caches have had a
-  // chance to give way, isolating what this task's own fix controls (see the report for the sub
-  // -10s case, which is expected to still be stale, and for why no amount of cache-clearing in
-  // this package can shorten that window).
+  // seconds. That means a schema edit becomes visible to a fresh `parseDocuments` call as soon
+  // as invalidateIfConfigChanged clears OUR cache, but the actual graphql-eslint internals
+  // underneath can still serve the old schema object for up to 10s after it was first loaded.
+  // This test waits 11s past the edit so both caches have had a chance to give way, isolating
+  // what this task's own fix controls (see the report for the sub-10s case, which is expected to
+  // still be stale, and for why no amount of cache-clearing in this package can shorten that
+  // window).
+  //
+  // This test runs with `NODE` deliberately unset (see run-parse-staleness.ts), which is the
+  // "clean" case. See the next test for the `NODE`-set case, which needs
+  // parse.ts's `parseForESLintDefeatingNodeCacheBypass` workaround to behave the same way.
   it(
     "re-reads the schema after it changes, without a process restart",
     () => {
@@ -78,6 +82,34 @@ describe("parseDocuments in a long-lived process", () => {
       const schemaPath = join(dir, "schema.graphql");
 
       const { first, second } = runParseStalenessScenario({ projectDir: dir, schemaPath, waitMs: 11_000 });
+
+      expect(first).toEqual(["a"]);
+      expect(second).toEqual(["a", "b"]);
+    },
+    20_000,
+  );
+
+  // `pnpm run <script>`/`pnpm exec` set a bare `NODE` env var to the node binary path, which
+  // `esm/cache.js`'s `ModuleCache.get` treats as "never expire" (see
+  // parse.ts's `parseForESLintDefeatingNodeCacheBypass` doc comment for the exact upstream
+  // expression). This simulates that launch path by forcing `NODE` to stay set for the whole
+  // subprocess, and asserts the schema edit is STILL observed after the same 11s wait. Without
+  // the workaround in parse.ts, this test fails (the cached schema is returned forever, so
+  // `second` stays `["a"]` even after 11s) -- verified directly by temporarily removing the
+  // workaround and re-running this test before writing this comment; see Task 11's follow-up
+  // report for that evidence.
+  it(
+    "re-reads the schema after it changes, even with NODE set (pnpm exec/pnpm run launch path)",
+    () => {
+      const dir = project();
+      const schemaPath = join(dir, "schema.graphql");
+
+      const { first, second } = runParseStalenessScenario({
+        projectDir: dir,
+        schemaPath,
+        waitMs: 11_000,
+        nodeEnvValue: process.execPath,
+      });
 
       expect(first).toEqual(["a"]);
       expect(second).toEqual(["a", "b"]);
