@@ -22,12 +22,7 @@ function setup() {
   const parsed = parseDocuments({ code, filePath });
   if (parsed[0]!.kind !== "parsed") throw new Error("expected a parsed document");
   const { ast, services, document } = parsed[0]!;
-  const sourceCode = createSourceCode({
-    text: document.text,
-    ast,
-    services,
-    getAncestors: () => [],
-  });
+  const sourceCode = createSourceCode({ text: document.text, ast, services });
   return { sourceCode, ast, text: document.text };
 }
 
@@ -142,32 +137,50 @@ describe("createSourceCode", () => {
       text: parsed[0]!.document.text,
       ast: parsed[0]!.ast,
       services: parsed[0]!.services,
-      getAncestors: () => [],
     });
     const operation = findNode(parsed[0]!.ast, "OperationDefinition")!;
 
     expect(sourceCode.getCommentsAfter(operation).map((c) => c.value)).toEqual([" trailing"]);
   });
 
-  it("delegates getAncestors() to the traversal state when called with no node", () => {
-    const parsed = parseDocuments({ code, filePath });
+  it("returns the whole run when several comments sit back to back before a node", () => {
+    // Two consecutive `#` lines with no token between them: getCommentsBefore must return both, in
+    // order, and only stop at the nearest real token — not at the boundary between the two comments.
+    const multiCommentCode = [
+      "const q3 = gql`",
+      "  # first comment",
+      "  # second comment",
+      "  query Multi {",
+      "    user { id }",
+      "  }",
+      "`;",
+      "",
+    ].join("\n");
+    const parsed = parseDocuments({ code: multiCommentCode, filePath });
     if (parsed[0]!.kind !== "parsed") throw new Error("expected a parsed document");
-    const marker = { type: "Document" } as GqlNode;
     const sourceCode = createSourceCode({
       text: parsed[0]!.document.text,
       ast: parsed[0]!.ast,
       services: parsed[0]!.services,
-      getAncestors: () => [marker],
     });
+    const operation = findNode(parsed[0]!.ast, "OperationDefinition")!;
 
-    expect(sourceCode.getAncestors()).toEqual([marker]);
+    expect(sourceCode.getCommentsBefore(operation).map((c) => c.value)).toEqual([
+      " first comment",
+      " second comment",
+    ]);
+  });
+
+  it("throws when getAncestors is called without a node, matching ESLint's SourceCode#getAncestors", () => {
+    const { sourceCode } = setup();
+    expect(() => (sourceCode.getAncestors as (node?: GqlNode) => GqlNode[])(undefined)).toThrow(TypeError);
   });
 
   it("computes getAncestors(node) by walking node.parent, as ESLint's SourceCode#getAncestors does", () => {
     const { sourceCode, ast } = setup();
-    // ESLint's real getAncestors(node) ignores any "current traversal" state and walks node.parent
-    // up to the root (throwing if node.parent chain has never been wired). graphql-eslint's own
-    // rules call it exactly this way: `context.sourceCode.getAncestors(node)` (selection-set-depth).
+    // ESLint's real getAncestors(node) walks node.parent up to the root (throwing without a node).
+    // graphql-eslint's own rules call it exactly this way:
+    // `context.sourceCode.getAncestors(node)` (selection-set-depth).
     traverse(ast, { enter: () => {}, leave: () => {} });
     const operation = findNode(ast, "OperationDefinition")!;
     const name = findNode(operation, "Name")!;
@@ -176,6 +189,44 @@ describe("createSourceCode", () => {
 
     expect(ancestors.map((a) => a.type)).toEqual(["Program", "Document", "OperationDefinition"]);
     expect(ancestors[ancestors.length - 1]).toBe(operation);
+  });
+
+  it("visits only real AST nodes when traversing the parsed root — no token or comment pseudo-nodes", () => {
+    const { ast } = setup();
+    const visitedTypes: string[] = [];
+    traverse(ast, { enter: (n) => visitedTypes.push(n.type), leave: () => {} });
+
+    // Measured real structure for this fixture: Program, Document, OperationDefinition, then
+    // Name/SelectionSet/Field/Name/SelectionSet/Field/Name for "query User { user { id } }" — 10
+    // nodes total. Before the traverse.ts fix this list also contained 8 token pseudo-nodes (types
+    // "Name" x4, "{" x2, "}" x2) and 1 comment pseudo-node (type "Line"), for 19 entries.
+    expect(visitedTypes).toEqual([
+      "Program",
+      "Document",
+      "OperationDefinition",
+      "Name",
+      "SelectionSet",
+      "Field",
+      "Name",
+      "SelectionSet",
+      "Field",
+      "Name",
+    ]);
+    expect(visitedTypes.filter((t) => t === "Name")).toHaveLength(3);
+    expect(visitedTypes).not.toContain("Line");
+    expect(visitedTypes).not.toContain("{");
+    expect(visitedTypes).not.toContain("}");
+  });
+
+  it("does not write stray .parent pointers onto the shared token and comment objects", () => {
+    const { ast } = setup();
+    traverse(ast, { enter: () => {}, leave: () => {} });
+
+    const tokens = (ast as unknown as { tokens: GqlNode[] }).tokens;
+    const comments = (ast as unknown as { comments: GqlNode[] }).comments;
+
+    for (const token of tokens) expect("parent" in token).toBe(false);
+    for (const comment of comments) expect("parent" in comment).toBe(false);
   });
 });
 

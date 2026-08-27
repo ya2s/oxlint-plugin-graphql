@@ -2,6 +2,16 @@ import type { GqlNode } from "./types.js";
 
 const IGNORED_KEYS = new Set(["parent", "leadingComments", "trailingComments"]);
 
+// Mirrors eslint-visitor-keys' table (visitor-keys.json: `Program: ["body"]`) for node types whose
+// duck-typed fields would otherwise be walked as children. graphql-eslint's parsed root is a real
+// ESTree "Program" node that also carries `tokens`/`comments` arrays of plain `{ type, range }`
+// objects — exactly what `isNode()` below treats as a node. ESLint's own traverser never descends
+// into those because it consults a fixed visitor-key table first and only falls back to duck-typing
+// for node types the table doesn't know, which is what happens here for every GraphQL-specific type.
+const KNOWN_VISITOR_KEYS: Record<string, readonly string[]> = {
+  Program: ["body"],
+};
+
 export type TraverseHandlers = {
   enter(node: GqlNode, ancestors: GqlNode[]): void;
   leave(node: GqlNode, ancestors: GqlNode[]): void;
@@ -17,8 +27,8 @@ function visit(node: GqlNode, ancestors: GqlNode[], handlers: TraverseHandlers):
   handlers.enter(node, ancestors.slice());
 
   ancestors.push(node);
-  for (const key of Object.keys(node)) {
-    if (IGNORED_KEYS.has(key) || key.startsWith("_")) continue;
+  const keys = KNOWN_VISITOR_KEYS[node.type] ?? Object.keys(node).filter((key) => !IGNORED_KEYS.has(key) && !key.startsWith("_"));
+  for (const key of keys) {
     const value = node[key];
     if (Array.isArray(value)) {
       for (const item of value) {
