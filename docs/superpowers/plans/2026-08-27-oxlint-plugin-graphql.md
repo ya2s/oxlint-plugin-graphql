@@ -15,7 +15,12 @@
 - `engines.node`: `">=22.12.0"`。開発環境（`.node-version`）は 24。CI マトリクスは 22.12 / 24 / 26。
 - ESM のみ。CJS 出力は作らない。
 - ビルドは tsdown。`typescript` は `^7.0.0` を使う。rolldown-plugin-dts が TS 7 で失敗する場合のみ `^5.9.0` に下げる（その判断は Task 1 で行い、決めた側を package.json に固定する）。
-- dependencies は `@oxlint/plugins` のみ。`@graphql-eslint/eslint-plugin` と `graphql` は peerDependencies。`eslint` は devDependencies のみ（conformance の参照実装用）で、runtime 依存に入れない。
+- dependencies は `@oxlint/plugins` と `esquery`。`@graphql-eslint/eslint-plugin` と `graphql` は peerDependencies。`eslint` は devDependencies のみ（conformance の参照実装用）で、runtime 依存に入れない。
+  - （2026-08-27 改訂）当初この制約は「dependencies は `@oxlint/plugins` のみ」だった。graphql-eslint のルールが
+    ESLint のセレクタ構文（`OperationDefinition[name=undefined]` 等）でビジターを登録することが Task 7 で判明し、
+    ESLint と同じく `esquery` が実行時に必要になったため改訂。バンドルに取り込む方式は採らない
+    （esquery は BSD-3-Clause、同梱される estraverse は BSD-2-Clause で、いずれも再配布時の著作権表示を要求するうえ、
+    依存監査から third-party コードが見えなくなる）。tsdown では external 扱いにする。
 - `eslint` は `^9`（graphql-eslint 4.4 が想定する系列、oxlint が互換を主張する系列）に固定する。
 - プラグイン名は `graphql`。ルール ID は `graphql/<本家と同名>`。
 - ルール実装・config の内容は graphql-eslint から機械的に導出する。ルール名や既定値をハードコードした一覧は作らない（本家更新に自動追従させるため）。
