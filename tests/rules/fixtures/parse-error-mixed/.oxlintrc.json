@@ -1,0 +1,14 @@
+{
+  "plugins": [],
+  "categories": {
+    "correctness": "off"
+  },
+  "jsPlugins": [
+    "../../../../dist/index.js"
+  ],
+  "rules": {
+    "graphql/parse-error": "error",
+    "graphql/no-anonymous-operations": "error",
+    "graphql/no-duplicate-fields": "error"
+  }
+}
