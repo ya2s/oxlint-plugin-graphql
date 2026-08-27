@@ -1,0 +1,36 @@
+{
+  "name": "oxlint-plugin-graphql",
+  "version": "0.0.0",
+  "description": "Run @graphql-eslint/eslint-plugin rules on oxlint",
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22.12.0" },
+  "packageManager": "pnpm@11.24.0",
+  "files": ["dist"],
+  "exports": {
+    ".": "./dist/index.js",
+    "./configs/*": "./dist/configs/*"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@oxlint/plugins": "^1.80.0"
+  },
+  "peerDependencies": {
+    "@graphql-eslint/eslint-plugin": "^4.4.1",
+    "graphql": "^16"
+  },
+  "devDependencies": {
+    "@graphql-eslint/eslint-plugin": "^4.4.1",
+    "@types/node": "^22.12.0",
+    "eslint": "^9",
+    "graphql": "^16",
+    "oxlint": "^1.80.0",
+    "tsdown": "^0.22.14",
+    "typescript": "^7.0.0",
+    "vitest": "^4.1.0"
+  }
+}
