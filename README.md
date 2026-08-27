@@ -37,10 +37,16 @@ an oxlint plugin, not a linter on its own.
   "jsPlugins": ["oxlint-plugin-graphql"],
   "rules": {
     "graphql/no-anonymous-operations": "error",
-    "graphql/require-selections": "error"
+    "graphql/require-selections": "error",
+    "graphql/parse-error": "error"
   }
 }
 ```
+
+`graphql/parse-error` is included above so a broken `gql` template is actually reported —
+without it, a GraphQL syntax error is silently skipped by every other rule (see [Behavioural
+differences](#behavioural-differences-from-eslint) below), and oxlint reports nothing and exits
+`0` for that file, unlike ESLint, which raises a fatal parsing error for the same input.
 
 With a `graphql.config.js` (or any [graphql-config](https://the-guild.dev/graphql/config) file)
 next to it pointing at your schema —
@@ -88,7 +94,14 @@ configs:
 | `operations-all`          | 38                                                |
 
 **From `.oxlintrc.json`**, `extends` a generated JSON fragment (published under
-`dist/configs/<name>.json`, resolvable via this package's `exports["./configs/*"]` map):
+`dist/configs/<name>.json`) by its path on disk — oxlint resolves each `extends` entry as a plain
+filesystem path relative to the config file, not through Node's module/`exports` resolution, so a
+bare package-subpath specifier (e.g. `"oxlint-plugin-graphql/configs/operations-recommended.json"`)
+does NOT work here (verified directly: it fails with `NotFound`, oxlint having looked for it as a
+literal `./oxlint-plugin-graphql/configs/...` directory under the config file). This package's
+`exports["./configs/*"]` map exists so `oxlint-plugin-graphql/configs/<name>.json` resolves as a
+real *Node* import specifier elsewhere (e.g. from a script that needs the raw JSON) — it plays no
+part in how `.oxlintrc.json`'s `extends` finds this file. Use the relative path below instead:
 
 ```json
 {
@@ -136,12 +149,16 @@ of at the top level:
       "files": ["*.graphql.ts"],
       "jsPlugins": ["oxlint-plugin-graphql"],
       "rules": {
-        "graphql/no-anonymous-operations": "error"
+        "graphql/no-anonymous-operations": "error",
+        "graphql/parse-error": "error"
       }
     }
   ]
 }
 ```
+
+`graphql/parse-error` is included here too, for the same reason as in Quick start: without it, a
+syntax error inside a matched file is silently skipped rather than reported.
 
 Verified directly: a file matching `*.graphql.ts` gets the `graphql/*` diagnostic, a sibling `.ts`
 file that doesn't match the glob gets none.
@@ -155,12 +172,17 @@ plugin, give it an alias with `jsPlugins`' object form:
 {
   "jsPlugins": [{ "name": "gql", "specifier": "oxlint-plugin-graphql" }],
   "rules": {
-    "gql/no-anonymous-operations": "error"
+    "gql/no-anonymous-operations": "error",
+    "gql/parse-error": "error"
   }
 }
 ```
 
-Verified: diagnostics print as `gql(no-anonymous-operations)` under this config.
+The alias applies to every rule id, including this plugin's own `parse-error` — it's included
+here for the same reason as in Quick start (without it, syntax errors are silently skipped).
+
+Verified: diagnostics print as `gql(no-anonymous-operations)` and `gql(parse-error)` under this
+config.
 
 ## Schema without graphql-config: `settings.graphql.schemaSdl`
 
@@ -318,6 +340,26 @@ This is exercised end to end in this package's own test suite
   `RuleTester` `messageId`-assertion style can't be used against these rules — assert on the
   rendered `message` text instead.
 
+- **An unloadable schema aborts the file; ESLint reports it as one normal diagnostic.** If
+  graphql-config's `schema` points at a file that doesn't exist (or otherwise fails to load),
+  graphql-eslint's own parser throws a plain, position-less `Error` — deliberately, per this
+  plugin's fail-fast error handling (a configuration mistake, not something to paper over). Under
+  ESLint that error still becomes one lint message on the file. oxlint's JS-plugin API has no
+  equivalent "report and continue" channel for an exception raised outside a rule's own
+  `create()`/visitor (the `Program()` hook that calls `parseDocuments` runs once per rule, before
+  any rule-specific code), so it aborts the whole file instead, with exit code `1`:
+
+  ```
+  app.ts: error: Error running JS plugin. File path: /path/to/app.ts Error: [oxlint-plugin-graphql] rule "no-anonymous-operations" failed on /path/to/app.ts: [graphql-eslint] Error while loading schema: Unable to find any GraphQL type definitions for the following pointers: - ./missing.graphql
+  ```
+
+  The `[oxlint-plugin-graphql] rule "<id>" failed on <file>: ...` prefix is the same attribution
+  wrapper used for a rule throwing during its own execution (see the 10-rules-need-`documents`
+  entry above) — applied here too so a schema-loading failure is traceable to this plugin and the
+  file that triggered it, instead of a raw graphql-eslint/graphql-config stack with no indication
+  of which plugin was involved. Fix it the same way you'd fix any config error: make the `schema`
+  path in `graphql.config.*` point at a real file.
+
 ## Editor support
 
 Diagnostics, quick-fix suggestions, and fix-on-save all work through the [oxc VS Code
@@ -369,21 +411,33 @@ false-positives on the examples graphql-eslint itself calls valid) — it's just
 as "35 diagnostics matched," which is why it's broken out separately rather than folded into a
 single percentage.
 
-A second, hand-written **supplemental corpus** (4 cases, covering rules whose upstream examples
-don't exercise their most interesting behaviour) is 100% substantive: 4/4 real, matching
-diagnostics.
+A second, hand-written **supplemental corpus** (7 cases, covering rules whose upstream examples
+don't exercise their most interesting behaviour, or that have no upstream examples at all) is
+100% substantive: 7/7 real, matching diagnostics. Three of those seven cover the
+"graphql-js-validation" rule family — 27 rules, generated by wrapping a `graphql-js` validation
+function, that share one implementation and code path (token scanning, a token's `loc` passed
+straight through to `context.report`, `fixer.replaceText(token, ...)` for suggestions) found
+nowhere else in this plugin, and that contribute zero derived-corpus cases because none of them
+have `meta.docs.examples` upstream. The three: `fields-on-correct-type` (exercises the
+suggestion/fix path), `no-undefined-variables` (a plain report with no suggestion, and a rule with
+zero examples for any reason), and `overlapping-fields-can-be-merged` (two diagnostics from one
+`validate()` call, proving the per-error token lookup isn't just reusing the first match).
 
 **Autofix comparison** (every case whose rule has `meta.fixable`, run through both engines'
 `--fix`): 6 comparisons — 3 produced a real, byte-identical fix on both sides that actually
 changed the input; 3 were correctly-vacuous no-ops (nothing to fix on either side); 0 mismatches.
 
 **Execution coverage**: of the 65 rules this plugin exposes, 36 have at least one usable example in
-graphql-eslint's own docs to build a corpus case from (the other 29 have no `meta.docs.examples` at
-all upstream — not something this plugin can add). Every contributed case actually executes on
-both engines (0 rules with cases that never ran). Of the rules that did execute, 7 never produced a
-diagnostic in the corpus at all (`known-directives`, `match-document-filename`, `no-deprecated`,
-`relay-edge-types`, `relay-page-info`, `unique-fragment-name`, `unique-operation-name`) — their
-available examples all happen to be "Correct" ones.
+graphql-eslint's own docs to build a *derived*-corpus case from. The other 29 have no
+`meta.docs.examples` at all upstream, so the derived corpus can't be built for them — but that
+does not mean they can't be covered at all: the supplemental corpus above is exactly the mechanism
+for that (already used for 4 rules before this, and now for 3 more of these 29 — see above), it's
+just hand-written instead of mechanically generated from docs that don't exist. Every derived-corpus
+case actually executes on both engines (0 rules with cases that never ran). Of the rules that did
+execute, 7 never produced a diagnostic in the corpus at all (`known-directives`,
+`match-document-filename`, `no-deprecated`, `relay-edge-types`, `relay-page-info`,
+`unique-fragment-name`, `unique-operation-name`) — their available examples all happen to be
+"Correct" ones.
 
 **The 5 "not-compared" cases are pinned to specific, documented bugs in
 `@graphql-eslint/eslint-plugin@4.4.1` itself** (not this plugin) — 4 in `naming-convention`, whose

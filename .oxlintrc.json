@@ -1,0 +1,3 @@
+{
+  "ignorePatterns": ["dist/**", "**/fixtures/**", "conformance/last-run-report.txt"]
+}

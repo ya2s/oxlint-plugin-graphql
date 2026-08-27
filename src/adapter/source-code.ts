@@ -18,7 +18,6 @@ export type SourceCodeShim = {
   /** Walks `node.parent` up to the root, matching ESLint's SourceCode#getAncestors exactly, including
    *  throwing when called without a node — the only way graphql-eslint's own rules call it. */
   getAncestors(node: GqlNode): GqlNode[];
-  getLines(): string[];
 };
 
 export function createSourceCode(options: {
@@ -50,7 +49,6 @@ export function createSourceCode(options: {
       if (!node) throw new TypeError("Missing required argument: node.");
       return ancestorsOf(node);
     },
-    getLines: () => text.split("\n"),
   };
 }
 

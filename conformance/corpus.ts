@@ -42,7 +42,7 @@ export function buildCorpus(): CorpusCase[] {
 }
 
 /**
- * examples の GraphQL を JS の gql テンプレートに埋め込む。両経路で同じ入力を使うため。
+ * Embeds an example's GraphQL in a JS `gql` template, so both engines lint the exact same input.
  *
  * A handful of examples (relay-connection-types, require-selections) include a literal backtick
  * inside a comment, used as markdown-style code formatting in the docs (e.g. `` `Connection` ``

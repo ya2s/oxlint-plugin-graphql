@@ -62,8 +62,20 @@ export function linkParents(root: GqlNode): void {
   linkChildren(root);
 }
 
+/**
+ * The single definition of "what counts as a child key" for a node, shared by `linkChildren`
+ * (the one-time parenting pass) and `visit` (the rule-visiting traversal). These two previously
+ * each inlined the identical expression — the one real half-migration left over from splitting
+ * `linkParents` out of `traverse()` (see `linkParents`' own doc comment): changing one without
+ * the other would silently make "what counts as a child" diverge between them, with nothing to
+ * catch it.
+ */
+function childKeysOf(node: GqlNode): readonly string[] {
+  return KNOWN_VISITOR_KEYS[node.type] ?? Object.keys(node).filter((key) => !IGNORED_KEYS.has(key) && !key.startsWith("_"));
+}
+
 function linkChildren(node: GqlNode): void {
-  const keys = KNOWN_VISITOR_KEYS[node.type] ?? Object.keys(node).filter((key) => !IGNORED_KEYS.has(key) && !key.startsWith("_"));
+  const keys = childKeysOf(node);
   for (const key of keys) {
     const value = node[key];
     if (Array.isArray(value)) {
@@ -84,7 +96,7 @@ function visit(node: GqlNode, ancestors: GqlNode[], handlers: TraverseHandlers):
   handlers.enter(node, ancestors.slice());
 
   ancestors.push(node);
-  const keys = KNOWN_VISITOR_KEYS[node.type] ?? Object.keys(node).filter((key) => !IGNORED_KEYS.has(key) && !key.startsWith("_"));
+  const keys = childKeysOf(node);
   for (const key of keys) {
     const value = node[key];
     if (Array.isArray(value)) {

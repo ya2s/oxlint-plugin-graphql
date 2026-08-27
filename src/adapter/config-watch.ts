@@ -3,8 +3,9 @@
  * schema or graphql-config edit is invisible to it forever, since the cache is keyed only by
  * `filePath`/`code`/`schemaSdl`, none of which change when a *different* file on disk changes.
  *
- * CARRY FORWARD TO TASK 13'S README ("known limitations" section) -- the real, current situation
- * as of the fix in parse.ts's `parseForESLintDefeatingNodeCacheBypass`:
+ * This is what makes editor support (the oxc language server, `oxlint --lsp`) work at all for a
+ * long-lived process instead of just the one-shot CLI. The real, current situation, combined
+ * with the workaround in parse.ts's `parseForESLintDefeatingNodeCacheBypass`:
  *
  * 1. Editing the CONTENT of an already-configured schema file (same path, new text) does NOT
  *    need a language server restart. This module's cache-clear (via the fingerprint below) lets
@@ -23,23 +24,25 @@
  *    seconds, only a restart fixes it. `parseForESLintDefeatingNodeCacheBypass` in parse.ts
  *    neutralizes `process.env.NODE` around each synchronous `parseForESLint` call specifically to
  *    restore case 1's "no restart needed, ~10s latency" behavior even when `NODE` is set. See
- *    that function's doc comment and Task 11's follow-up report for the measurements.
+ *    that function's doc comment for the details.
  *
  * 3. Editing graphql.config.* itself so it points at a *different* schema file (its `schema`
  *    pointer changes, a `projects` entry is added/removed/renamed, or the config file is moved)
- *    STILL requires a language server restart -- this is NOT fixed by anything in this task.
- *    This fingerprint does detect that edit (the config file's own mtime is always included) and
- *    correctly clears this module's cache, but `@graphql-eslint/eslint-plugin`'s OWN module-level
- *    `graphQLConfig` singleton (esm/graphql-config.js) is never rebuilt within a process once
- *    set, so the next real parse still asks the *stale* GraphQLConfig object for the file's
- *    project, which still returns the *old* schema pointer. Verified directly: even 11+ seconds
- *    after such an edit, in a process that never restarts, the old schema is still what gets
- *    used. Re-importing graphql-eslint's parser module with a cache-busting query string (an
- *    approach considered for defeating this singleton outright) does not work -- see Task 11's
- *    report for why.
+ *    STILL requires a language server restart -- nothing in this module (or elsewhere in this
+ *    plugin) fixes that. This fingerprint does detect that edit (the config file's own mtime is
+ *    always included) and correctly clears this module's cache, but
+ *    `@graphql-eslint/eslint-plugin`'s OWN module-level `graphQLConfig` singleton
+ *    (esm/graphql-config.js) is never rebuilt within a process once set, so the next real parse
+ *    still asks the *stale* GraphQLConfig object for the file's project, which still returns the
+ *    *old* schema pointer. Verified directly: even 11+ seconds after such an edit, in a process
+ *    that never restarts, the old schema is still what gets used. Re-importing graphql-eslint's
+ *    parser module with a cache-busting query string (a way to defeat this singleton that was
+ *    considered) does not work: `@graphql-eslint/eslint-plugin`'s package.json has no matching
+ *    `exports` entry for a query-string-suffixed subpath, so the import simply fails to resolve.
  *
  * See tests/adapter/config-watch.test.ts's "re-reads the schema" tests (both the plain case and
- * the `NODE`-set case) for the measurements behind all of the above.
+ * the `NODE`-set case) for the measurements behind all of the above, and the README's "Editor
+ * support" section for how this reads to an end user.
  */
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";

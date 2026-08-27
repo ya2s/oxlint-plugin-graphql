@@ -44,11 +44,23 @@ export function toOxlintRule(ruleId: string, rule: GraphQLESLintRuleLike): Rule 
     createOnce(context) {
       return {
         Program() {
-          const parsed = parseDocuments({
-            code: context.sourceCode.text,
-            filePath: context.physicalFilename,
-            schemaSdl: readSchemaSdl(context.settings as Readonly<Record<string, unknown>>),
-          });
+          let parsed: ParsedDocument[];
+          try {
+            parsed = parseDocuments({
+              code: context.sourceCode.text,
+              filePath: context.physicalFilename,
+              schemaSdl: readSchemaSdl(context.settings as Readonly<Record<string, unknown>>),
+            });
+          } catch (error) {
+            // A parse-time failure (e.g. graphql-config's `schema` pointing at a file that
+            // doesn't exist) escapes parseDocuments as a raw, unattributed error -- unlike a
+            // rule's own create()/visitor throwing, which wrapRuleError below already attributes.
+            // Without this wrapper, the raw error reaches the user as graphql-eslint/graphql-config's
+            // own 20-frame node_modules stack, with nothing saying which plugin or file caused it.
+            // Wrapped the same way as a rule-execution error, for the same reason: attribution and
+            // fail-fast, not a change in behavior (parsing still aborts the file either way).
+            throw wrapRuleError(error, ruleId, context.physicalFilename);
+          }
 
           for (const document of parsed) {
             if (document.kind !== "parsed") continue;
@@ -177,7 +189,10 @@ function runVisitor(ast: GqlNode, visitor: VisitorObject): void {
   });
 }
 
-function wrapRuleError(error: unknown, ruleId: string, filePath: string): Error {
+/** Exported so parse-error.ts (which also calls parseDocuments directly, from its own
+ *  Program()) can attribute a parse-time failure the same way a rule-execution failure is
+ *  attributed here. */
+export function wrapRuleError(error: unknown, ruleId: string, filePath: string): Error {
   const message = error instanceof Error ? error.message : String(error);
   // Do NOT overwrite `.stack` with the original error's stack: its first line repeats the
   // *original* message, so the wrapper text above (rule id + file path) would never be visible

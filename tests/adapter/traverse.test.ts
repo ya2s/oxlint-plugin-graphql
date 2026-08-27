@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
-import { beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import { getLinkParentsCallCount, resetLinkParentsCallCount, traverse } from "../../src/adapter/traverse.js";
 import { clearParseCache, parseDocuments } from "../../src/adapter/parse.js";
 import type { GqlNode } from "../../src/adapter/types.js";

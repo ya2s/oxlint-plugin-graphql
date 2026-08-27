@@ -1,12 +1,12 @@
 import type { GraphQLSchema } from "graphql";
 
 export type EmbeddedDocument = {
-  /** ESLint の processor 規約に合わせた仮想ファイルパス */
+  /** Virtual file path, following ESLint's processor convention. */
   filePath: string;
   text: string;
-  /** 報告された line に加算する値 */
+  /** Added to a reported line number. */
   lineOffset: number;
-  /** 報告された range に加算する値 */
+  /** Added to a reported range. */
   offset: number;
 };
 
@@ -30,9 +30,9 @@ export type ParserServices = {
 
 export type ParseError = {
   message: string;
-  /** 埋め込みドキュメント内の 1-based 行 */
+  /** 1-based line within the embedded document. */
   line: number;
-  /** 埋め込みドキュメント内の 0-based 列 */
+  /** 0-based column within the embedded document. */
   column: number;
 };
 

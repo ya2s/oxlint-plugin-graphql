@@ -138,6 +138,84 @@ describe("oxlint-plugin-graphql end to end", () => {
     );
   });
 
+  // Coverage gap B from the final review: every other fix/suggestion test in this file (and in
+  // conformance/'s fixture builder) puts the violation in the FIRST embedded `gql` template, so
+  // a bug in `report-mapper.ts`'s per-document `offset`/`lineOffset` handling for any document
+  // past index 0 would never turn a single test red. This fixture has three templates; the
+  // violation (and the suggestion that fixes it) is in the THIRD (index 2), with two earlier,
+  // clean templates in between. Asserts the whole file byte-for-byte: both templates before the
+  // fixed one, and the text around the fix within the third template, must be untouched.
+  it("applies a suggestion to the third of three gql templates, leaving the first two untouched", () => {
+    const dir = copyFixture("suggestions-later-document");
+
+    runOxlint({ cwd: dir, args: ["--fix-suggestions", "app.ts"] });
+
+    const after = readFileSync(join(dir, "app.ts"), "utf8");
+    expect(after).toBe(
+      [
+        '// @ts-nocheck -- fixture file linted by oxlint, not type-checked; `gql` is not a real import.',
+        "const first = gql`",
+        "  query getUser {",
+        "    user {",
+        "      id",
+        "    }",
+        "  }",
+        "`;",
+        "",
+        "const second = gql`",
+        "  query getUsers {",
+        "    users {",
+        "      id",
+        "    }",
+        "  }",
+        "`;",
+        "",
+        "const typeDefs = gql`",
+        "  type User {",
+        "    Id: ID!",
+        "    name: String",
+        "  }",
+        "`;",
+        "",
+        "export { first, second, typeDefs };",
+        "",
+      ].join("\n"),
+    );
+  });
+
+  // Coverage gap C from the final review: `toEmbedded` (conformance/corpus.ts) always wraps its
+  // GraphQL in a multi-line template (`` gql`\n...\n` ``), so no test anywhere in this repo had
+  // ever run a genuinely single-line `` gql`...` `` — the exact shape that broke a README
+  // example. Verified directly against real ESLint (via conformance/eslint-runner.ts, same
+  // fixture): it reports the identical `line: 2, column: 1` — NOT the host column where `query`
+  // actually starts (~15) — because graphql-eslint's own `postprocess` only shifts `line` by
+  // `lineOffset`, never `column` (see the design doc and the "Behavioural differences" README
+  // section: `getNodeByRangeIndex`/`getTokenBefore` etc. are the parts that use `range`, which
+  // IS offset-corrected; the reported `loc.column` for display is not, upstream included). This
+  // asserts the real, matching-upstream behavior rather than the "looks right" column a naive
+  // reader might expect — and separately confirms the *fix* still lands in the right place
+  // (fixes are range-based, not line/column-based, so they're unaffected by this quirk).
+  it("reports a single-line gql template at graphql-eslint's own (unshifted) column, and fixes it correctly anyway", () => {
+    const result = runOxlint({ cwd: fixture("single-line-template"), args: ["app.ts"] });
+
+    expect(result.diagnostics).toHaveLength(1);
+    const span = result.diagnostics[0]!.labels[0]!.span;
+    expect(span.line).toBe(2);
+    expect(span.column).toBe(1);
+
+    const dir = copyFixture("single-line-template");
+    runOxlint({ cwd: dir, args: ["--fix-suggestions", "app.ts"] });
+    const after = readFileSync(join(dir, "app.ts"), "utf8");
+    expect(after).toBe(
+      [
+        '// @ts-nocheck -- fixture file linted by oxlint, not type-checked; `gql` is not a real import.',
+        "const q = gql`query user { user { id } }`;",
+        "export { q };",
+        "",
+      ].join("\n"),
+    );
+  });
+
   it("applies the no-typename-prefix suggestion via --fix-suggestions, leaving the second template untouched", () => {
     const dir = copyFixture("suggestions-typename-prefix");
 

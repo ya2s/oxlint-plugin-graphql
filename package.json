@@ -2,7 +2,26 @@
   "name": "oxlint-plugin-graphql",
   "version": "0.0.0",
   "description": "Run @graphql-eslint/eslint-plugin rules on oxlint",
+  "keywords": [
+    "oxlint",
+    "oxlint-plugin",
+    "eslint",
+    "eslint-plugin",
+    "graphql",
+    "graphql-eslint",
+    "lint",
+    "linter"
+  ],
+  "homepage": "https://github.com/ya2s/oxlint-plugin-graphql#readme",
+  "bugs": {
+    "url": "https://github.com/ya2s/oxlint-plugin-graphql/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ya2s/oxlint-plugin-graphql.git"
+  },
   "license": "MIT",
+  "author": "ya2s",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
@@ -20,7 +39,8 @@
     "test": "tsdown && vitest run tests",
     "test:conformance": "pnpm build && vitest run conformance",
     "typecheck": "tsc --noEmit",
-    "release": "pnpm build && changeset publish"
+    "lint": "oxlint -c .oxlintrc.json src tests conformance scripts",
+    "release": "changeset version && pnpm build && changeset publish"
   },
   "dependencies": {
     "@oxlint/plugins": "^1.80.0",
