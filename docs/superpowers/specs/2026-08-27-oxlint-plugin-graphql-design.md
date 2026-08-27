@@ -225,9 +225,14 @@ src/
 
 実装計画の最初のフェーズで、小さな実測により以下を確定する。ここで前提が崩れた場合は設計に戻る。
 
-1. JS プラグインから `context.settings` が読めること、および `.oxlintrc.json` での指定形状。
-2. pluck 後の column 補正の要否。本家 `postprocess` は line のみ補正しているが、
-   実 fixture で列位置が一致するかを確認する。
+1. （検証済み 2026-08-27）JS プラグインから `context.settings` は読める。`.oxlintrc.json` の
+   `settings` がそのままオブジェクトとして届く。
+2. （検証済み 2026-08-27）`context.report` の `loc.column` は ESLint と同じ 0-based。
+   `{ line: 1, column: 6 }` で報告すると oxlint の JSON 出力は `line: 1, column: 7`（1-based 表示）、
+   `offset: 6` になる。`loc.end` を与えると `span.length` に反映される。
+   したがって column の補正は不要で、本家 `postprocess` と同じく line のみ補正する。
+   なお oxlint の JSON 出力は `diagnostics[].labels[].span` 形式で ESLint の JSON とは構造が異なるため、
+   conformance 比較には両者を共通形へ正規化する層が必要。
 3. LSP 常駐時のキャッシュ挙動。`graphql.config` とスキーマを編集したときに診断が更新されるか。
 4. oxlint の JS プラグインが worker thread で動く場合に、graphql-config の `jiti` 経由の
    `graphql.config.ts` 同期ロードが成功すること。
