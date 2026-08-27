@@ -19,6 +19,7 @@ export type GqlNode = {
   type: string;
   loc: GqlLoc;
   range: [number, number];
+  parent: GqlNode | null | undefined;
   [key: string]: unknown;
 };
 

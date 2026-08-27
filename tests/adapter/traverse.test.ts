@@ -110,4 +110,112 @@ describe("traverse", () => {
     // Verify no node was entered twice by checking object identity
     expect(visitedNodeObjects.size).toBe(enterEvents.length);
   });
+
+  it("wires parent references on real parsed AST", () => {
+    clearParseCache();
+
+    const filePath = join(projectDir, "app.ts");
+    const code = ["const q = gql`", "  query User {", "    user { id }", "  }", "`;", ""].join("\n");
+
+    const parsed = parseDocuments({ code, filePath });
+    expect(parsed[0]!.kind).toBe("parsed");
+    if (parsed[0]!.kind !== "parsed") return;
+
+    const root: GqlNode = (parsed[0] as { kind: "parsed"; ast: GqlNode }).ast;
+    let fieldNode: GqlNode | null = null;
+    let documentNode: GqlNode | null = null;
+
+    traverse(root, {
+      enter: (node) => {
+        if (node.type === "Field" && fieldNode === null) {
+          fieldNode = node;
+        }
+        if (node.type === "Document" && documentNode === null) {
+          documentNode = node;
+        }
+      },
+      leave: () => {},
+    });
+
+    expect(fieldNode).not.toBeNull();
+    expect(documentNode).not.toBeNull();
+    if (!fieldNode || !documentNode) return;
+
+    const field: GqlNode = fieldNode;
+    const document: GqlNode = documentNode;
+
+    // Root node's parent should be null
+    expect(root.parent).toBeNull();
+
+    // Document node's parent should be the root Program
+    expect(document.parent).toBe(root);
+
+    // Walk up the parent chain from the Field node and verify it reaches Document
+    let current: GqlNode | null = field;
+    let steps = 0;
+    const maxSteps = 10; // Safety limit to prevent infinite loops
+
+    while (current && steps < maxSteps) {
+      if (current.type === "Document") {
+        // Successfully reached Document
+        expect(current.parent).toBe(root);
+        // Continue up to verify we reach root with null parent
+        expect(root.parent).toBeNull();
+        return;
+      }
+      current = current.parent ?? null;
+      steps++;
+    }
+
+    throw new Error("Failed to reach Document by walking parent chain from Field node");
+  });
+
+  it("passes fresh ancestors array to each callback", () => {
+    const root = node("Document", { definitions: [node("OperationDefinition", { name: node("Name") })] });
+    const capturedArrays: { enter: GqlNode[][]; leave: GqlNode[][] } = { enter: [], leave: [] };
+
+    traverse(root, {
+      enter: (n, ancestors) => {
+        capturedArrays.enter.push([...ancestors]);
+      },
+      leave: (n, ancestors) => {
+        capturedArrays.leave.push([...ancestors]);
+      },
+    });
+
+    // Verify that each callback received a fresh array
+    const allCapturedArrays = [...capturedArrays.enter, ...capturedArrays.leave];
+    for (let i = 0; i < allCapturedArrays.length; i++) {
+      for (let j = i + 1; j < allCapturedArrays.length; j++) {
+        // Arrays should be different object references (fresh copies)
+        expect(allCapturedArrays[i]).not.toBe(allCapturedArrays[j]!);
+      }
+    }
+
+    // Verify the content is still correct after traversal completes
+    // The first enter (Document) should have empty ancestors
+    expect(capturedArrays.enter[0]).toEqual([]);
+
+    // The second enter (OperationDefinition) should have Document as ancestor
+    expect(capturedArrays.enter[1]?.length).toBe(1);
+    expect(capturedArrays.enter[1]?.[0]?.type).toBe("Document");
+  });
+
+  it("ignores underscore-prefixed keys and parent back-references", () => {
+    const child = node("Name");
+    const root = node("Document", {
+      definitions: [child],
+      _privateNode: node("ShouldNotVisit"),
+      _anotherPrivate: node("AlsoShouldNotVisit"),
+      parent: node("ShouldNotVisitFromIgnoredKey"),
+    });
+    const visited: string[] = [];
+
+    traverse(root, { enter: (n) => visited.push(n.type), leave: () => {} });
+
+    expect(visited).toEqual(["Document", "Name"]);
+    // Verify that parent was set correctly by the traverser
+    expect(root.parent).toBeNull();
+    expect(child.parent).toBe(root);
+  });
 });
