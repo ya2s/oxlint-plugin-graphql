@@ -13,7 +13,7 @@ rule this plugin adds itself, `graphql/parse-error` (see [Behavioural
 differences](#behavioural-differences-from-eslint) below) — 65 rules in total.
 
 **Verified against:** oxlint `1.80.0`, `@graphql-eslint/eslint-plugin` `4.4.1`, `graphql` `16.14.2`,
-Node `26.7.0` (this package's own `engines.node` requirement is `>=22.12.0`). Every command and
+Node `26.7.0` (this package's own `engines.node` requirement is `>=22.13.0`). Every command and
 config example in this README was run for real while writing it — see
 [Conformance](#conformance) for how the rule behaviour itself is checked against upstream.
 
@@ -51,7 +51,7 @@ export default { schema: "./schema.graphql", documents: "./app.ts" };
 ```
 
 (`documents` is required here because `require-selections` is one of the rules listed in
-[8 rules that require `documents`](#behavioural-differences-from-eslint) below; leaving it out
+[rules that require `documents`](#behavioural-differences-from-eslint) below; leaving it out
 throws instead of linting) — and an `app.ts` containing:
 
 ```ts
@@ -183,7 +183,20 @@ reads them differs from graphql-eslint itself, and none of the options graphql-e
 }
 ```
 
-Against `const q = gql\`query { user { name } }\`;`, this reports:
+Against an `app.ts` containing:
+
+```ts
+const q = gql`
+  query {
+    user {
+      name
+    }
+  }
+`;
+export { q };
+```
+
+this reports:
 
 ```
 app.ts:4:7: error graphql(no-deprecated): Field "name" is marked as deprecated in your GraphQL schema (reason: use fullName instead)
@@ -222,8 +235,27 @@ This is exercised end to end in this package's own test suite
   Run oxlint for your JS/TS and `eslint '**/*.graphql'` for your GraphQL documents; the two don't
   overlap.
 
-- **`.vue` / `.svelte` embedded GraphQL is not covered either** — oxlint doesn't parse those file
-  formats yet, independent of anything this plugin does.
+- **`.vue` / `.svelte` embedded GraphQL is not covered, but not because oxlint can't see the
+  code.** oxlint's own parser already extracts and lints the `<script>` block of both formats by
+  default (verified directly: a syntax error placed inside `<script>` in a `.vue` or `.svelte`
+  file is reported at its real in-block position, with or without `--vue-plugin` — that flag only
+  adds a separate, additional set of template-aware native rules, +31 of them in the build tested
+  here, and doesn't gate whether JS plugins see the script content at all). This plugin's own
+  `Program` visitor does receive that extracted text for both formats. What actually blocks
+  GraphQL extraction differs by format, and both are upstream `@graphql-eslint/eslint-plugin`
+  behaviour, not an oxlint limitation and not something this plugin adds:
+  - **`.vue`**: graphql-eslint's own processor unconditionally rejects it — the exact error
+    is `Processing of .vue files is no longer supported, follow the new official vue example
+    for ESLint's flat config ...` — regardless of what's installed.
+  - **`.svelte`**: graphql-eslint's extractor (`graphql-tag-pluck`) does attempt real extraction,
+    but needs the optional `svelte2tsx` and `svelte` packages installed to parse the component at
+    all; without them it fails with `GraphQL template literals cannot be plucked from a Svelte
+    template code without having the "svelte2tsx" & "svelte" package installed.` Neither package
+    is a dependency of this plugin or of `@graphql-eslint/eslint-plugin`, so a default install
+    hits this. Whether installing them makes `.svelte` extraction actually work end to end through
+    oxlint was not verified here — the failure above surfaced as a plugin-load-time error with
+    exit code 0 (silently non-fatal for the run), which is itself worth confirming before relying
+    on it.
 
 ## Behavioural differences from ESLint
 
@@ -239,12 +271,27 @@ This is exercised end to end in this package's own test suite
   It's included, as `"error"`, in every one of the five ported configs above, and needs no schema
   or `documents` to fire.
 
-- **8 rules throw unless graphql-config's `documents` is set and loaded**: `no-unused-fragments`,
-  `no-one-place-fragments`, `no-unused-fields`, `require-import-fragment`, `require-selections`,
-  `unique-operation-name`, `unique-fragment-name`, and `known-fragment-names` (only when a
-  document has a fragment spread graphql-eslint can't resolve within the same document). This is
+- **10 rules can throw unless graphql-config's `documents` is set and loaded.** This is
   graphql-eslint's own behaviour (`requireGraphQLOperations`), not something this plugin adds —
-  running any of them without `documents` configured fails the whole file with:
+  re-derived directly from `@graphql-eslint/eslint-plugin@4.4.1`'s source (every call site of
+  `requireGraphQLOperations`), not transcribed from its docs. Two groups, because they call it
+  differently:
+
+  - **7 always call it, unconditionally, on every lint of a matching node**: `no-unused-fragments`,
+    `no-one-place-fragments`, `no-unused-fields`, `require-import-fragment`, `require-selections`,
+    `unique-fragment-name`, and `unique-operation-name` (the last reuses `unique-fragment-name`'s
+    own check function). Enabling any of these without `documents` configured throws on every
+    matching file, every time.
+  - **3 call it only when a document contains a fragment spread (`...Foo`) that can't be resolved
+    within the same document**: `known-fragment-names`, `no-undefined-variables`, and
+    `no-unused-variables` (all three route through a shared `handleMissingFragments` helper that
+    only reaches `requireGraphQLOperations` when `missingFragments.length > 0`). A document with no
+    such unresolved spread never throws, even with these rules enabled and no `documents`
+    configured — verified directly: the same rule against the same schema throws only once an
+    unresolvable `...UserFields` spread is added to the query.
+
+  Running any of the 10 without `documents` configured (and, for the conditional 3, with a
+  document that needs it) fails the whole file with:
 
   ```
   Error running JS plugin. ... Error: [oxlint-plugin-graphql] rule "no-unused-fragments" failed on <file>:
@@ -354,7 +401,13 @@ Run it yourself: `pnpm test:conformance` (builds the package first, then runs th
 
 ## Requirements
 
-- Node.js `>=22.12.0` (this repo develops against `24`; CI covers `22.12`, `24`, and `26`)
+- Node.js `>=22.13.0` (this repo develops against `24`; CI builds on `24` and tests on `22.13`,
+  `24`, and `26`). The floor is `22.13`, not `22.12`, because `pnpm` `11.24.0` (this repo's
+  pinned package manager) itself refuses to run under `22.12` (`This version of pnpm requires
+  at least Node.js v22.13`), and this repo's build tool, `tsdown`, additionally requires
+  `22.18`+ (or `24.11`+) to load its own config natively — which is exactly why CI never runs
+  `tsdown` on the `22.13`/`24` test legs, only on a dedicated `24` build job (see
+  [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 - ESM only
 - `@graphql-eslint/eslint-plugin` `^4.4.1` and `graphql` `^16` as peer dependencies
 - `oxlint` itself (not a declared peer — bring your own; verified against `1.80.0`)
