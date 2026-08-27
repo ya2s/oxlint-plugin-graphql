@@ -4,7 +4,7 @@ import type { GqlNode, ParseError, ParsedDocument, ParserServices } from "./type
 
 const MAX_CACHE_ENTRIES = 8;
 
-type CacheEntry = { code: string; documents: ParsedDocument[] };
+type CacheEntry = { code: string; schemaSdl: string | undefined; documents: ParsedDocument[] };
 
 const cache = new Map<string, CacheEntry>();
 let parseCallCount = 0;
@@ -24,7 +24,7 @@ export function parseDocuments(options: {
   schemaSdl?: string;
 }): ParsedDocument[] {
   const cached = cache.get(options.filePath);
-  if (cached && cached.code === options.code) {
+  if (cached && cached.code === options.code && cached.schemaSdl === options.schemaSdl) {
     cache.delete(options.filePath);
     cache.set(options.filePath, cached);
     return cached.documents;
@@ -41,18 +41,13 @@ export function parseDocuments(options: {
         ast: GqlNode;
         services: ParserServices;
       };
-      if (options.schemaSdl === undefined && result.services.schema === null) {
-        throw new Error(
-          `No GraphQL schema found for "${document.filePath}". Configure a graphql-config schema.`,
-        );
-      }
       return { kind: "parsed", document, ast: result.ast, services: result.services } as const;
     } catch (error) {
       return { kind: "error", document, error: toParseError(error) } as const;
     }
   });
 
-  cache.set(options.filePath, { code: options.code, documents });
+  cache.set(options.filePath, { code: options.code, schemaSdl: options.schemaSdl, documents });
   if (cache.size > MAX_CACHE_ENTRIES) {
     const oldest = cache.keys().next();
     if (!oldest.done) cache.delete(oldest.value);

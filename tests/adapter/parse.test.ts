@@ -49,10 +49,29 @@ describe("parseDocuments", () => {
     expect(parsed[0]!.error.line).toBe(1);
   });
 
-  it("throws when the graphql-config schema cannot be loaded", () => {
+  it("parses successfully with a null schema when no graphql-config exists (parity with graphql-eslint)", () => {
+    // graphql-eslint does not require a schema to be configured up front: schema availability is
+    // enforced per rule at rule-execution time (`requireGraphQLSchema` / `requireGraphQLOperations`),
+    // not by the parser. A project with no graphql-config at all must still parse.
+    const parsed = parseDocuments({
+      code: "const q = gql`{ a }`;\n",
+      filePath: "/tmp/no-graphql-config/app.ts",
+    });
+
+    expect(parsed[0]!.kind).toBe("parsed");
+    if (parsed[0]!.kind !== "parsed") return;
+    expect(parsed[0]!.services.schema).toBeNull();
+  });
+
+  it("throws when the graphql-config schema fails to load", () => {
+    const brokenSchemaDir = join(projectDir, "..", "broken-schema");
+
     expect(() =>
-      parseDocuments({ code: "const q = gql`{ a }`;\n", filePath: "/tmp/no-graphql-config/app.ts" }),
-    ).toThrow();
+      parseDocuments({
+        code: "const q = gql`{ a }`;\n",
+        filePath: join(brokenSchemaDir, "app.ts"),
+      }),
+    ).toThrow(/Unable to find any GraphQL type definitions/);
   });
 
   it("loads a TypeScript graphql config file", () => {
@@ -78,5 +97,26 @@ describe("parseDocuments", () => {
     parseDocuments({ code: code.replace("id", "name"), filePath });
 
     expect(getParseCallCount()).toBe(afterFirst + 1);
+  });
+
+  it("keys the cache by schemaSdl, not just filePath and code", () => {
+    const sameCode = "const q = gql`{ a }`;\n";
+    const sameFilePath = "/tmp/no-config/app.ts";
+
+    const first = parseDocuments({
+      code: sameCode,
+      filePath: sameFilePath,
+      schemaSdl: "type Query { a: Int }",
+    });
+    const second = parseDocuments({
+      code: sameCode,
+      filePath: sameFilePath,
+      schemaSdl: "type Query { a: String }",
+    });
+
+    if (first[0]!.kind !== "parsed") throw new Error("expected a parsed document");
+    if (second[0]!.kind !== "parsed") throw new Error("expected a parsed document");
+    expect(first[0]!.services.schema?.getQueryType()?.getFields().a?.type.toString()).toBe("Int");
+    expect(second[0]!.services.schema?.getQueryType()?.getFields().a?.type.toString()).toBe("String");
   });
 });
