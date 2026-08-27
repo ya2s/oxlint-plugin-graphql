@@ -16,8 +16,9 @@
     "./configs/*": "./dist/configs/*"
   },
   "scripts": {
-    "build": "tsdown && node scripts/generate-config-json.ts",
-    "test": "tsdown && vitest run",
+    "build": "tsdown && node --experimental-strip-types scripts/generate-config-json.ts",
+    "test": "tsdown && vitest run tests",
+    "test:conformance": "pnpm build && vitest run conformance",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

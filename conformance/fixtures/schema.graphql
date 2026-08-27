@@ -1,0 +1,59 @@
+type Query {
+  user(id: ID!): User
+  users: [User!]!
+  node(id: ID!): Node
+  viewer: Viewer
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): CreateUserPayload
+  deleteUser(id: ID!): Boolean
+  addAlert: Boolean
+}
+
+type Subscription {
+  userUpdated: User
+}
+
+interface Node {
+  id: ID!
+}
+
+input CreateUserInput {
+  name: String!
+}
+
+type CreateUserPayload {
+  user: User
+  query: Query
+}
+
+type User implements Node {
+  id: ID!
+  name: String
+  fullName: String
+  email: String @deprecated(reason: "Use contact")
+  friends(first: Int, after: String): UserConnection
+}
+
+type UserConnection {
+  edges: [UserEdge]
+  pageInfo: PageInfo!
+}
+
+type UserEdge {
+  cursor: String!
+  node: User
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+  endCursor: String
+}
+
+type Viewer {
+  id: ID!
+  user: User
+}
