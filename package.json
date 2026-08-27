@@ -16,7 +16,7 @@
     "./configs/*": "./dist/configs/*"
   },
   "scripts": {
-    "build": "tsdown",
+    "build": "tsdown && node scripts/generate-config-json.ts",
     "test": "tsdown && vitest run",
     "typecheck": "tsc --noEmit"
   },

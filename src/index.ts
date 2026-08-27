@@ -9,3 +9,12 @@ const plugin = definePlugin({
 
 export default plugin;
 export { rules };
+export {
+  configs,
+  operationsAll,
+  operationsRecommended,
+  schemaAll,
+  schemaRecommended,
+  schemaRelay,
+} from "./configs/index.js";
+export type { OxlintGraphqlConfig } from "./configs/index.js";

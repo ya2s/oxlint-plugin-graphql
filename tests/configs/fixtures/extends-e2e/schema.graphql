@@ -1,0 +1,29 @@
+"""A user in the system"""
+type User {
+  id: ID!
+  name: String! @deprecated(reason: "use fullName")
+  fullName: String!
+  friends: [User!]!
+}
+
+type Query {
+  user(id: ID!): User
+  users: [User!]!
+}
+
+type Mutation {
+  createUser(input: CreateUserInput!): User!
+}
+
+type Subscription {
+  userCreated: User!
+}
+
+input CreateUserInput {
+  name: String!
+}
+
+enum Role {
+  ADMIN
+  USER
+}
