@@ -199,7 +199,7 @@ export function wrapRuleError(error: unknown, ruleId: string, filePath: string):
   // to anything reading `.stack` (e.g. an uncaught-exception logger) — only `.message` would
   // carry it. `cause` preserves the original error (and its stack) for inspection without
   // clobbering ours.
-  return new Error(`[oxlint-plugin-graphql] rule "${ruleId}" failed on ${filePath}: ${message}`, {
+  return new Error(`[oxlint-plugin-graphql-eslint] rule "${ruleId}" failed on ${filePath}: ${message}`, {
     cause: error,
   });
 }

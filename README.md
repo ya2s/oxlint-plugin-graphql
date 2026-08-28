@@ -1,4 +1,4 @@
-# oxlint-plugin-graphql
+# oxlint-plugin-graphql-eslint
 
 Runs [`@graphql-eslint/eslint-plugin`](https://github.com/dimaMachina/graphql-eslint) rules
 inside [oxlint](https://oxc.rs/), via oxlint's JS-plugin API. It re-implements the
@@ -20,7 +20,7 @@ config example in this README was run for real while writing it — see
 ## Install
 
 ```sh
-pnpm add -D oxlint-plugin-graphql @graphql-eslint/eslint-plugin graphql
+pnpm add -D oxlint-plugin-graphql-eslint @graphql-eslint/eslint-plugin graphql
 ```
 
 `@graphql-eslint/eslint-plugin` and `graphql` are peer dependencies — this plugin calls straight
@@ -36,7 +36,7 @@ an oxlint plugin, not a linter on its own.
 import { defineConfig } from "oxlint";
 
 export default defineConfig({
-  jsPlugins: ["oxlint-plugin-graphql"],
+  jsPlugins: ["oxlint-plugin-graphql-eslint"],
   rules: {
     "graphql/no-anonymous-operations": "error",
     "graphql/require-selections": "error",
@@ -50,7 +50,7 @@ export default defineConfig({
 
 ```json
 {
-  "jsPlugins": ["oxlint-plugin-graphql"],
+  "jsPlugins": ["oxlint-plugin-graphql-eslint"],
   "rules": {
     "graphql/no-anonymous-operations": "error",
     "graphql/require-selections": "error",
@@ -115,7 +115,7 @@ configs:
 
 ```ts
 import { defineConfig } from "oxlint";
-import { operationsRecommended } from "oxlint-plugin-graphql";
+import { operationsRecommended } from "oxlint-plugin-graphql-eslint";
 
 export default defineConfig({ extends: [operationsRecommended] });
 ```
@@ -123,16 +123,16 @@ export default defineConfig({ extends: [operationsRecommended] });
 **From `.oxlintrc.json`**, `extends` a generated JSON fragment (published under
 `dist/configs/<name>.json`) by its path on disk — oxlint resolves each `extends` entry as a plain
 filesystem path relative to the config file, not through Node's module/`exports` resolution, so a
-bare package-subpath specifier (e.g. `"oxlint-plugin-graphql/configs/operations-recommended.json"`)
+bare package-subpath specifier (e.g. `"oxlint-plugin-graphql-eslint/configs/operations-recommended.json"`)
 does NOT work here (verified directly: it fails with `NotFound`, oxlint having looked for it as a
-literal `./oxlint-plugin-graphql/configs/...` directory under the config file). This package's
-`exports["./configs/*"]` map exists so `oxlint-plugin-graphql/configs/<name>.json` resolves as a
+literal `./oxlint-plugin-graphql-eslint/configs/...` directory under the config file). This package's
+`exports["./configs/*"]` map exists so `oxlint-plugin-graphql-eslint/configs/<name>.json` resolves as a
 real *Node* import specifier elsewhere (e.g. from a script that needs the raw JSON) — it plays no
 part in how `.oxlintrc.json`'s `extends` finds this file. Use the relative path below instead:
 
 ```json
 {
-  "extends": ["./node_modules/oxlint-plugin-graphql/dist/configs/operations-recommended.json"]
+  "extends": ["./node_modules/oxlint-plugin-graphql-eslint/dist/configs/operations-recommended.json"]
 }
 ```
 
@@ -146,12 +146,12 @@ dependency, real `node_modules` resolution) — `graphql(no-anonymous-operations
 >
 > ```
 > Relative JS plugin specifiers are not supported in configs provided via `extends` in `oxlint.config.ts`.
-> Found: "./node_modules/oxlint-plugin-graphql/dist/index.js"
+> Found: "./node_modules/oxlint-plugin-graphql-eslint/dist/index.js"
 > Use a package name (e.g. "eslint-plugin-foo") or an absolute path instead.
 > ```
 >
 > This is why the config objects this package exports (`operationsRecommended`, etc.) use the bare
-> package name `"oxlint-plugin-graphql"` as their `jsPlugins` entry. `.oxlintrc.json`'s top-level
+> package name `"oxlint-plugin-graphql-eslint"` as their `jsPlugins` entry. `.oxlintrc.json`'s top-level
 > `jsPlugins` has no such restriction — a relative path works there.
 
 ## Scoping the plugin with `overrides`
@@ -167,7 +167,7 @@ export default defineConfig({
   overrides: [
     {
       files: ["*.graphql.ts"],
-      jsPlugins: ["oxlint-plugin-graphql"],
+      jsPlugins: ["oxlint-plugin-graphql-eslint"],
       rules: {
         "graphql/no-anonymous-operations": "error",
         "graphql/parse-error": "error",
@@ -192,7 +192,7 @@ plugin, give it an alias with `jsPlugins`' object form:
 import { defineConfig } from "oxlint";
 
 export default defineConfig({
-  jsPlugins: [{ name: "gql", specifier: "oxlint-plugin-graphql" }],
+  jsPlugins: [{ name: "gql", specifier: "oxlint-plugin-graphql-eslint" }],
   rules: {
     "gql/no-anonymous-operations": "error",
     "gql/parse-error": "error",
@@ -217,7 +217,7 @@ reads them differs from graphql-eslint itself, and none of the options graphql-e
 import { defineConfig } from "oxlint";
 
 export default defineConfig({
-  jsPlugins: ["oxlint-plugin-graphql"],
+  jsPlugins: ["oxlint-plugin-graphql-eslint"],
   settings: {
     graphql: {
       schemaSdl:
@@ -341,7 +341,7 @@ This is exercised end to end in this package's own test suite
   document that needs it) fails the whole file with:
 
   ```
-  Error running JS plugin. ... Error: [oxlint-plugin-graphql] rule "no-unused-fragments" failed on <file>:
+  Error running JS plugin. ... Error: [oxlint-plugin-graphql-eslint] rule "no-unused-fragments" failed on <file>:
   Rule `no-unused-fragments` requires graphql-config `documents` field to be set and loaded.
   See https://the-guild.dev/graphql/eslint/docs/usage#providing-operations for more info
   ```
@@ -375,10 +375,10 @@ This is exercised end to end in this package's own test suite
   any rule-specific code), so it aborts the whole file instead, with exit code `1`:
 
   ```
-  app.ts: error: Error running JS plugin. File path: /path/to/app.ts Error: [oxlint-plugin-graphql] rule "no-anonymous-operations" failed on /path/to/app.ts: [graphql-eslint] Error while loading schema: Unable to find any GraphQL type definitions for the following pointers: - ./missing.graphql
+  app.ts: error: Error running JS plugin. File path: /path/to/app.ts Error: [oxlint-plugin-graphql-eslint] rule "no-anonymous-operations" failed on /path/to/app.ts: [graphql-eslint] Error while loading schema: Unable to find any GraphQL type definitions for the following pointers: - ./missing.graphql
   ```
 
-  The `[oxlint-plugin-graphql] rule "<id>" failed on <file>: ...` prefix is the same attribution
+  The `[oxlint-plugin-graphql-eslint] rule "<id>" failed on <file>: ...` prefix is the same attribution
   wrapper used for a rule throwing during its own execution (see the 10-rules-need-`documents`
   entry above) — applied here too so a schema-loading failure is traceable to this plugin and the
   file that triggered it, instead of a raw graphql-eslint/graphql-config stack with no indication

@@ -5,7 +5,7 @@ export type OxlintGraphqlConfig = {
   rules: Record<string, unknown>;
 };
 
-const PLUGIN_SPECIFIER = "oxlint-plugin-graphql";
+const PLUGIN_SPECIFIER = "oxlint-plugin-graphql-eslint";
 
 // graphql-eslint's own flat configs cannot name a rule that doesn't exist upstream, so
 // graphql/parse-error -- this plugin's replacement for ESLint's fatal parsing message, with no

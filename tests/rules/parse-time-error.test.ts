@@ -22,7 +22,7 @@ describe("a parse-time failure (unloadable schema) is attributed to this plugin"
     // just that it exists.
     const crash = result.diagnostics.find((d) => !(d.code ?? "").startsWith("graphql("));
     expect(crash, JSON.stringify(result.diagnostics)).toBeDefined();
-    expect(crash!.message).toContain('[oxlint-plugin-graphql] rule "no-anonymous-operations" failed on');
+    expect(crash!.message).toContain('[oxlint-plugin-graphql-eslint] rule "no-anonymous-operations" failed on');
     expect(crash!.message).toContain("app.ts");
     expect(crash!.message).toContain("Unable to find any GraphQL type definitions");
   });

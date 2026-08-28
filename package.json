@@ -1,5 +1,5 @@
 {
-  "name": "oxlint-plugin-graphql",
+  "name": "oxlint-plugin-graphql-eslint",
   "version": "0.0.0",
   "description": "Run @graphql-eslint/eslint-plugin rules on oxlint",
   "keywords": [
@@ -36,6 +36,7 @@
   },
   "scripts": {
     "build": "tsdown && node --experimental-strip-types scripts/generate-config-json.ts",
+    "prepack": "pnpm build",
     "test": "tsdown && vitest run tests",
     "test:conformance": "pnpm build && vitest run conformance",
     "typecheck": "tsc --noEmit",

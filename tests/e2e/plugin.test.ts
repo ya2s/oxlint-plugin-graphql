@@ -41,7 +41,7 @@ const hasSuggestionsRuleIds = Object.entries(graphqlEslintRules)
   .map(([id]) => id)
   .sort();
 
-describe("oxlint-plugin-graphql end to end", () => {
+describe("oxlint-plugin-graphql-eslint end to end", () => {
   it("derives the hasSuggestions rule set mechanically from graphql-eslint's own meta flag", () => {
     // 24 rules in @graphql-eslint/eslint-plugin@4.4.1 declare `meta.hasSuggestions: true`. This
     // assertion pins that count so a version bump that adds/removes one is visible here, and

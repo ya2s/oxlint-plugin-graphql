@@ -78,7 +78,7 @@ export function findKnownDifference(ruleId: string, caseId: string): KnownDiffer
 
 /**
  * Strips everything that legitimately differs between the two engines' error text — absolute
- * paths, this adapter's own `[oxlint-plugin-graphql] rule "X" failed on <path>:` prefix and
+ * paths, this adapter's own `[oxlint-plugin-graphql-eslint] rule "X" failed on <path>:` prefix and
  * stack trace, ESLint's `\nOccurred while linting <path>...` tail — down to the underlying JS
  * error's own message, so a `KnownDifference` can assert the two sides threw for the *same*
  * reason, not merely that both threw.

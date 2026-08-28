@@ -1,13 +1,13 @@
-# oxlint-plugin-graphql 設計
+# oxlint-plugin-graphql-eslint 設計
 
 - 日付: 2026-08-27
 - ステータス: 設計確定（実装計画待ち）
-- リポジトリ: ya2s/oxlint-plugin-graphql
+- リポジトリ: ya2s/oxlint-plugin-graphql-eslint
 
 ## 1. 目的
 
 `@graphql-eslint/eslint-plugin` のルールを oxlint 上で実行できるようにする npm 公開パッケージ
-`oxlint-plugin-graphql` を作る。graphql-eslint のルール実装は再実装せず、そのまま実行する。
+`oxlint-plugin-graphql-eslint` を作る。graphql-eslint のルール実装は再実装せず、そのまま実行する。
 
 ## 2. 前提（調査で確定した事実）
 
@@ -164,7 +164,7 @@ src/
   alias で回避できる旨を README に書く。
 - oxlint は JS プラグインの `configs` を読まないため、config は 2 形態で配布する。
   - `oxlint.config.ts` 向け: `extends` に渡せる設定オブジェクトを named export する。
-  - `.oxlintrc.json` 向け: `extends: ["./node_modules/oxlint-plugin-graphql/configs/operations-recommended.json"]`
+  - `.oxlintrc.json` 向け: `extends: ["./node_modules/oxlint-plugin-graphql-eslint/configs/operations-recommended.json"]`
     のように参照できる JSON 断片を同梱する。
 - `overrides[].jsPlugins` を使って GraphQL 関連ルールを特定の glob だけに適用する例を README に載せる。
 
@@ -215,7 +215,7 @@ src/
 
 ## 10. パッケージング
 
-- パッケージ名: `oxlint-plugin-graphql`（公式の `oxlint-plugin-eslint` と同じ命名規約）。
+- パッケージ名: `oxlint-plugin-graphql-eslint`（公式の `oxlint-plugin-eslint` と同じ命名規約）。
 - `engines.node`: `>=22.12.0`。oxlint の下限に揃え、EOL の Node 20 を落とす。
   開発環境（`.node-version`）は Active LTS の v24。CI マトリクスは 22.13 / 24 / 26。
 - ESM のみ。TypeScript で実装し、ビルドは **tsdown**（内部で rolldown 1.2 と

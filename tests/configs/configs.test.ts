@@ -46,9 +46,9 @@ describe("configs", () => {
   });
 
   it("declares the plugin so extending a config is enough", () => {
-    expect(operationsRecommended.jsPlugins).toEqual(["oxlint-plugin-graphql"]);
+    expect(operationsRecommended.jsPlugins).toEqual(["oxlint-plugin-graphql-eslint"]);
     for (const config of Object.values(configs)) {
-      expect(config.jsPlugins).toEqual(["oxlint-plugin-graphql"]);
+      expect(config.jsPlugins).toEqual(["oxlint-plugin-graphql-eslint"]);
     }
   });
 
@@ -159,7 +159,7 @@ describe("JSON fragment generation", () => {
 // via .oxlintrc.json's `extends`. The fixture at tests/configs/fixtures/extends-e2e uses
 // "extends": ["../../../../dist/configs/schema-relay.json"] -- a plain relative path from the
 // .oxlintrc.json file to the generated fragment. This is the form that was found to work; see
-// the task report for the resolution details (a bare `jsPlugins: ["oxlint-plugin-graphql"]`
+// the task report for the resolution details (a bare `jsPlugins: ["oxlint-plugin-graphql-eslint"]`
 // package-name specifier inside that fragment also resolves correctly here, via Node's
 // self-referencing package resolution, since the fixture lives inside this package's own
 // directory tree and package.json declares a matching "exports" field).

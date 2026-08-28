@@ -1,14 +1,14 @@
-# oxlint-plugin-graphql Implementation Plan
+# oxlint-plugin-graphql-eslint Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** `@graphql-eslint/eslint-plugin` の全ルールを oxlint 上で実行できる npm 公開パッケージ `oxlint-plugin-graphql` を作る。
+**Goal:** `@graphql-eslint/eslint-plugin` の全ルールを oxlint 上で実行できる npm 公開パッケージ `oxlint-plugin-graphql-eslint` を作る。
 
 **Architecture:** graphql-eslint の parser（`parseForESLint`）と processor（`processor.preprocess`）は ESLint 非依存の純関数なのでそのまま再利用し、ESLint ランタイムの代役（`SourceCode` / `context` / AST walker / 座標変換）だけを自作する。各ルールは oxlint の `Program` visitor で発火し、JS AST は参照しない。互換性は「全ルールの `meta.docs.examples` から生成したコーパスを ESLint 経路と oxlint 経路の両方で走らせて診断を完全一致比較する」conformance テストで担保する。
 
 **Tech Stack:** TypeScript / ESM / pnpm / tsdown（rolldown 内蔵）/ vitest / oxlint 1.80 / `@oxlint/plugins` / `@graphql-eslint/eslint-plugin` 4.4 / graphql 16
 
-**Spec:** `docs/superpowers/specs/2026-08-27-oxlint-plugin-graphql-design.md`
+**Spec:** `docs/superpowers/specs/2026-08-27-oxlint-plugin-graphql-eslint-design.md`
 
 ## Global Constraints
 
@@ -55,7 +55,7 @@ oxlint 側の前提（`loc` 基準、`settings`、`Program` 発火、`--fix` の
 
 ```json
 {
-  "name": "oxlint-plugin-graphql",
+  "name": "oxlint-plugin-graphql-eslint",
   "version": "0.0.0",
   "description": "Run @graphql-eslint/eslint-plugin rules on oxlint",
   "license": "MIT",
@@ -1641,7 +1641,7 @@ function runRuleOnDocument(input: {
 
 function wrapRuleError(error: unknown, ruleId: string, filePath: string): Error {
   const message = error instanceof Error ? error.message : String(error);
-  const wrapped = new Error(`[oxlint-plugin-graphql] rule "${ruleId}" failed on ${filePath}: ${message}`);
+  const wrapped = new Error(`[oxlint-plugin-graphql-eslint] rule "${ruleId}" failed on ${filePath}: ${message}`);
   if (error instanceof Error && error.stack) wrapped.stack = error.stack;
   return wrapped;
 }
@@ -1986,7 +1986,7 @@ describe("configs", () => {
   });
 
   it("declares the plugin so extending a config is enough", () => {
-    expect(operationsRecommended.jsPlugins).toEqual(["oxlint-plugin-graphql"]);
+    expect(operationsRecommended.jsPlugins).toEqual(["oxlint-plugin-graphql-eslint"]);
   });
 });
 ```
@@ -2008,7 +2008,7 @@ export type OxlintGraphqlConfig = {
   rules: Record<string, unknown>;
 };
 
-const PLUGIN_SPECIFIER = "oxlint-plugin-graphql";
+const PLUGIN_SPECIFIER = "oxlint-plugin-graphql-eslint";
 
 function port(configName: string): OxlintGraphqlConfig {
   const source = (graphqlEslintConfigs as unknown as Record<string, { rules: Record<string, unknown> }>)[
@@ -2832,7 +2832,7 @@ function copyFixture(): string {
   return dir;
 }
 
-describe("oxlint-plugin-graphql end to end", () => {
+describe("oxlint-plugin-graphql-eslint end to end", () => {
   it("reports diagnostics from several rules on one file", () => {
     const result = runOxlint({ cwd: fixture, args: ["app.ts"] });
     const codes = result.diagnostics.map((d) => d.code).sort();
@@ -2917,12 +2917,12 @@ git commit -m "test: cover multi-rule diagnostics and suggestion fixes end to en
 `README.md` に以下を必ず含める。
 
 - 何をするパッケージか（graphql-eslint のルールを oxlint で動かすブリッジ）
-- インストール（`pnpm add -D oxlint-plugin-graphql @graphql-eslint/eslint-plugin graphql`）
+- インストール（`pnpm add -D oxlint-plugin-graphql-eslint @graphql-eslint/eslint-plugin graphql`）
 - `.oxlintrc.json` の例:
 
 ```json
 {
-  "jsPlugins": ["oxlint-plugin-graphql"],
+  "jsPlugins": ["oxlint-plugin-graphql-eslint"],
   "rules": {
     "graphql/no-anonymous-operations": "error",
     "graphql/require-selections": "error"
@@ -2934,13 +2934,13 @@ git commit -m "test: cover multi-rule diagnostics and suggestion fixes end to en
 
 ```json
 {
-  "extends": ["./node_modules/oxlint-plugin-graphql/configs/operations-recommended.json"]
+  "extends": ["./node_modules/oxlint-plugin-graphql-eslint/configs/operations-recommended.json"]
 }
 ```
 
 ```ts
 import { defineConfig } from "oxlint";
-import { operationsRecommended } from "oxlint-plugin-graphql";
+import { operationsRecommended } from "oxlint-plugin-graphql-eslint";
 
 export default defineConfig({ extends: [operationsRecommended] });
 ```

@@ -1,5 +1,5 @@
 ---
-"oxlint-plugin-graphql": minor
+"oxlint-plugin-graphql-eslint": minor
 ---
 
 Initial public release. Exposes all 64 `@graphql-eslint/eslint-plugin` rules, plus this
