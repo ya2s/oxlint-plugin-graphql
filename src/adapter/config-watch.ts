@@ -65,6 +65,28 @@ const CONFIG_FILE_NAMES = [
 ];
 
 const fingerprints = new Map<string, string>();
+const checkedAt = new Map<string, number>();
+let fingerprintCallCount = 0;
+
+/**
+ * Deliberately far below the ~10s floor `@graphql-eslint/eslint-plugin`'s own schema cache
+ * already imposes on how fast a schema edit can become visible (see this module's doc comment,
+ * point 1). At this length the memo in `invalidateIfConfigChanged` is invisible in the editor,
+ * while still collapsing the per-(rule x file) storm of fs calls that one lint pass makes.
+ */
+const FINGERPRINT_TTL_MS = 1_000;
+
+/** Test-only instrumentation, mirroring parse.ts's `clearParseCache`/`getParseCallCount`: lets a
+ *  test prove the fingerprint is computed once per directory per TTL rather than once per call. */
+export function clearConfigWatchCache(): void {
+  fingerprints.clear();
+  checkedAt.clear();
+  fingerprintCallCount = 0;
+}
+
+export function getConfigFingerprintCallCount(): number {
+  return fingerprintCallCount;
+}
 
 /**
  * A fingerprint of `filePath`'s graphql-config and the schema file(s) it points at, built from
@@ -73,6 +95,7 @@ const fingerprints = new Map<string, string>();
  * fingerprint per directory and clears the parse cache when this changes.
  */
 export function getConfigFingerprint(filePath: string): string {
+  fingerprintCallCount += 1;
   const parts: string[] = [];
 
   for (const configPath of findConfigFiles(filePath)) {
@@ -88,11 +111,36 @@ export function getConfigFingerprint(filePath: string): string {
 /**
  * Calls `onChange` (expected to clear the parse cache) the first time this is called for a given
  * directory, and again whenever `getConfigFingerprint` for `filePath` differs from the last
- * value seen for that directory. Safe to call on every `parseDocuments` invocation: the common
- * case (nothing changed) is just an mtime comparison.
+ * value seen for that directory.
+ *
+ * The fingerprint is recomputed at most once per `FINGERPRINT_TTL_MS` per directory, because it
+ * is NOT the cheap "just an mtime comparison" an earlier version of this comment claimed, and it
+ * is called far more often than the call site suggests: `parseDocuments` runs it *before* its own
+ * cache lookup, and every enabled rule calls `parseDocuments` separately for the same file (see
+ * rule-factory.ts's `Program()`), so an un-memoized run happens once per (rule x file). Each one
+ * walks up the directory tree `existsSync`-ing 14 config file names per level, then reads and
+ * regex-scans the config it finds and `statSync`s every schema path in it.
+ *
+ * Measured on a 300-file fixture (150 carrying a `gql` template) with the 33-rule
+ * `operations-recommended` preset: 9,900 un-memoized calls costing 1,333ms -- ~75% of the
+ * plugin's entire JS-side cost and the largest single item in the profile by a wide margin, ahead
+ * of GraphQL parsing (247ms) and all 33 rules' visitor runs combined (197ms). Memoizing takes
+ * that to 27ms, and the whole `oxlint` run from 2.10s to 0.85s, with byte-identical diagnostics.
+ *
+ * The TTL costs at most `FINGERPRINT_TTL_MS` of extra staleness in a language server, on top of
+ * the ~10s that graphql-eslint's own schema cache already imposes (see this module's doc comment,
+ * point 1) -- so it does not change any of the editor behaviour described there.
  */
 export function invalidateIfConfigChanged(filePath: string, onChange: () => void): void {
   const key = dirname(resolve(filePath));
+
+  const lastCheck = checkedAt.get(key);
+  // `performance.now()` rather than `Date.now()`: monotonic, so a system clock adjustment mid-run
+  // cannot make the memo look arbitrarily fresh (or stale) for the rest of the process.
+  const now = performance.now();
+  if (lastCheck !== undefined && now - lastCheck < FINGERPRINT_TTL_MS) return;
+  checkedAt.set(key, now);
+
   const current = getConfigFingerprint(filePath);
   if (fingerprints.get(key) !== current) {
     fingerprints.set(key, current);
