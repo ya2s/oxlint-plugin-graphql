@@ -35,19 +35,44 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
-      # With pending changesets, this opens/updates a "Version Packages" PR that bumps the
-      # version and writes the CHANGELOG. Once that PR is merged and no changesets remain,
-      # the same job publishes instead. `pnpm release` builds first, and `prepack` rebuilds
-      # during `npm publish`, so dist is never stale.
+      # Versioning only. With pending changesets this opens/updates a "Version Packages"
+      # PR; with none pending it does nothing and the publish step below takes over.
       #
-      # No NPM_TOKEN: npm authenticates via OIDC against the trusted publisher configured
-      # for this package (repository + this workflow filename). That also bypasses the 2FA
-      # prompt that blocks non-interactive token publishes, and generates provenance.
+      # Publishing is deliberately NOT delegated to the action's publish-script. changesets
+      # captures npm's stdout and reports only a one-line failure, which hid whether npm had
+      # even attempted the OIDC exchange when the first publish returned E404. Running
+      # `npm publish` directly keeps npm's own diagnostics ("OIDC is available", provenance
+      # signing, the real registry error) in the log.
       - uses: changesets/action@v2
+        id: changesets
         with:
           version-script: pnpm exec changeset version
-          publish-script: pnpm release
           commit-message: "chore: version packages"
           pr-title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish to npm if this version is new
+        run: |
+          set -euo pipefail
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          echo "local: $NAME@$VERSION"
+          if npm view "$NAME@$VERSION" version >/dev/null 2>&1; then
+            echo "already on the registry — nothing to publish"
+            exit 0
+          fi
+          npm --version
+          # prepack rebuilds dist during publish; authentication is OIDC (no token).
+          npm publish
+
+      - name: Tag the released version
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./package.json').version")
+          if git rev-parse "v$VERSION" >/dev/null 2>&1; then
+            echo "tag v$VERSION already exists"
+            exit 0
+          fi
+          git tag "v$VERSION"
+          git push origin "v$VERSION"
