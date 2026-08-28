@@ -61,12 +61,18 @@ describe("oxlint-plugin-graphql-eslint end to end", () => {
     expect(codes).toContain("graphql(require-selections)");
   });
 
-  it("prints readable, correctly located messages through the default CLI formatter", () => {
-    // Addition D: what a user actually sees, not the -f json shape every other test in this
+  it("prints readable, correctly located messages through the agent CLI formatter", () => {
+    // Addition D: a human-readable rendering, not the -f json shape every other test in this
     // repo asserts against. Run without runOxlint's helper (which hardcodes -f json).
+    //
+    // `-f agent` is pinned deliberately. With no -f, oxlint picks a formatter from the
+    // environment: the same compact form locally, but GitHub Actions annotations
+    // (`::error file=...`) once it detects CI — which made this assertion pass locally and
+    // fail in CI. Naming the formatter keeps the test measuring message text and positions
+    // rather than oxlint's environment detection.
     let stdout: string;
     try {
-      stdout = execFileSync(OXLINT_BIN, ["-c", ".oxlintrc.json", "app.ts"], {
+      stdout = execFileSync(OXLINT_BIN, ["-c", ".oxlintrc.json", "-f", "agent", "app.ts"], {
         cwd: fixture("multi-rule"),
         encoding: "utf8",
       });
