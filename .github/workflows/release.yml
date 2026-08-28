@@ -9,10 +9,11 @@ concurrency: ${{ github.workflow }}-${{ github.ref }}
 
 jobs:
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # trusted publishing requires a GitHub-hosted runner
     permissions:
       contents: write # create the version PR's branch and the release commit
       pull-requests: write # open and update the "Version Packages" PR
+      id-token: write # mint the OIDC token npm exchanges for publish rights
     steps:
       - uses: actions/checkout@v7
         with:
@@ -24,14 +25,24 @@ jobs:
         with:
           node-version: "24" # tsdown needs >=22.18 or >=24.11; the build runs here
           cache: pnpm
-          registry-url: https://registry.npmjs.org
+      # Deliberately no `registry-url`: that makes setup-node write an .npmrc with an
+      # `_authToken` line, which is pointless under trusted publishing and can break the
+      # OIDC exchange when the token is empty. npm defaults to registry.npmjs.org anyway.
+
+      # Trusted publishing needs npm >= 11.5.1, which is newer than the npm bundled with
+      # some Node 24 releases. Pin it rather than depend on the runner image.
+      - run: npm install -g npm@^11.5.1
 
       - run: pnpm install --frozen-lockfile
 
       # With pending changesets, this opens/updates a "Version Packages" PR that bumps the
       # version and writes the CHANGELOG. Once that PR is merged and no changesets remain,
-      # the same job publishes instead. `pnpm release` runs the build first, and `prepack`
-      # rebuilds during `npm publish`, so dist is never stale.
+      # the same job publishes instead. `pnpm release` builds first, and `prepack` rebuilds
+      # during `npm publish`, so dist is never stale.
+      #
+      # No NPM_TOKEN: npm authenticates via OIDC against the trusted publisher configured
+      # for this package (repository + this workflow filename). That also bypasses the 2FA
+      # prompt that blocks non-interactive token publishes, and generates provenance.
       - uses: changesets/action@v2
         with:
           version: pnpm exec changeset version
@@ -40,5 +51,3 @@ jobs:
           title: "chore: version packages"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
