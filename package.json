@@ -32,7 +32,8 @@
   ],
   "exports": {
     ".": "./dist/index.js",
-    "./configs/*": "./dist/configs/*"
+    "./configs/*": "./dist/configs/*",
+    "./package.json": "./package.json"
   },
   "scripts": {
     "build": "tsdown && node --experimental-strip-types scripts/generate-config-json.ts",
