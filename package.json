@@ -40,7 +40,7 @@
     "test": "tsdown && vitest run tests",
     "test:conformance": "pnpm build && vitest run conformance",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint -c oxlint.config.ts src tests conformance scripts",
+    "lint": "oxlint -c oxlint.config.ts --deny-warnings src tests conformance scripts",
     "release": "pnpm build && changeset publish"
   },
   "dependencies": {
