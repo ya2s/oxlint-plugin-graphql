@@ -1,0 +1,92 @@
+{
+  "plugins": [],
+  "categories": {
+    "correctness": "off"
+  },
+  "jsPlugins": [
+    "../../../../dist/index.js"
+  ],
+  "rules": {
+    "graphql/executable-definitions": "error",
+    "graphql/fields-on-correct-type": "error",
+    "graphql/fragments-on-composite-type": "error",
+    "graphql/known-argument-names": "error",
+    "graphql/known-directives": "error",
+    "graphql/known-fragment-names": "error",
+    "graphql/known-type-names": "error",
+    "graphql/lone-anonymous-operation": "error",
+    "graphql/lone-schema-definition": "error",
+    "graphql/no-fragment-cycles": "error",
+    "graphql/no-undefined-variables": "error",
+    "graphql/no-unused-variables": "error",
+    "graphql/overlapping-fields-can-be-merged": "error",
+    "graphql/possible-fragment-spread": "error",
+    "graphql/possible-type-extension": "error",
+    "graphql/provided-required-arguments": "error",
+    "graphql/scalar-leafs": "error",
+    "graphql/one-field-subscriptions": "error",
+    "graphql/unique-argument-names": "error",
+    "graphql/unique-directive-names": "error",
+    "graphql/unique-directive-names-per-location": "error",
+    "graphql/unique-field-definition-names": "error",
+    "graphql/unique-input-field-names": "error",
+    "graphql/unique-operation-types": "error",
+    "graphql/unique-type-names": "error",
+    "graphql/unique-variable-names": "error",
+    "graphql/value-literals-of-correct-type": "error",
+    "graphql/variables-are-input-types": "error",
+    "graphql/variables-in-allowed-position": "error",
+    "graphql/alphabetize": [
+      "error",
+      {
+        "selections": [
+          "OperationDefinition"
+        ]
+      }
+    ],
+    "graphql/description-style": "error",
+    "graphql/input-name": "error",
+    "graphql/lone-executable-definition": "error",
+    "graphql/match-document-filename": "error",
+    "graphql/naming-convention": "error",
+    "graphql/no-anonymous-operations": "error",
+    "graphql/no-deprecated": "error",
+    "graphql/no-duplicate-fields": "error",
+    "graphql/no-hashtag-description": "error",
+    "graphql/no-root-type": [
+      "error",
+      {
+        "disallow": [
+          "subscription"
+        ]
+      }
+    ],
+    "graphql/no-scalar-result-type-on-mutation": "error",
+    "graphql/no-typename-prefix": "error",
+    "graphql/no-unreachable-types": "error",
+    "graphql/relay-arguments": "error",
+    "graphql/relay-connection-types": "error",
+    "graphql/relay-edge-types": "error",
+    "graphql/relay-page-info": "error",
+    "graphql/require-deprecation-date": "error",
+    "graphql/require-deprecation-reason": "error",
+    "graphql/require-description": [
+      "error",
+      {
+        "types": true
+      }
+    ],
+    "graphql/require-field-of-type-query-in-mutation-result": "error",
+    "graphql/require-nullable-fields-with-oneof": "error",
+    "graphql/require-nullable-result-in-root": "error",
+    "graphql/require-type-pattern-with-oneof": "error",
+    "graphql/selection-set-depth": [
+      "error",
+      {
+        "maxDepth": 1
+      }
+    ],
+    "graphql/strict-id-in-types": "error",
+    "graphql/unique-enum-value-names": "error"
+  }
+}

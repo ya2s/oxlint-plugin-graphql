@@ -1,0 +1,10 @@
+{
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "jsPlugins": ["./plugin.js"],
+  "settings": { "graphql": { "schemaSdl": "type Query { a: Int }" } },
+  "rules": {
+    "contract/probe": "error",
+    "contract/fixer": "off"
+  }
+}

@@ -1,0 +1,5 @@
+{
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "extends": ["../../../../dist/configs/schema-relay.json"]
+}

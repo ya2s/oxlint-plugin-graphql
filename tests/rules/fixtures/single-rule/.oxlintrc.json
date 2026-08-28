@@ -1,0 +1,6 @@
+{
+  "plugins": [],
+  "categories": { "correctness": "off" },
+  "jsPlugins": ["../../../../dist/index.js"],
+  "rules": { "graphql/no-anonymous-operations": "error" }
+}

@@ -1,0 +1,12 @@
+{
+  "plugins": [],
+  "categories": {
+    "correctness": "off"
+  },
+  "jsPlugins": [
+    "../../../../dist/index.js"
+  ],
+  "rules": {
+    "graphql/parse-error": "error"
+  }
+}
