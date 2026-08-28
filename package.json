@@ -12,13 +12,13 @@
     "lint",
     "linter"
   ],
-  "homepage": "https://github.com/ya2s/oxlint-plugin-graphql#readme",
+  "homepage": "https://github.com/ya2s/oxlint-plugin-graphql-eslint#readme",
   "bugs": {
-    "url": "https://github.com/ya2s/oxlint-plugin-graphql/issues"
+    "url": "https://github.com/ya2s/oxlint-plugin-graphql-eslint/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/ya2s/oxlint-plugin-graphql.git"
+    "url": "git+https://github.com/ya2s/oxlint-plugin-graphql-eslint.git"
   },
   "license": "MIT",
   "author": "ya2s",
