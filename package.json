@@ -39,7 +39,7 @@
     "test": "tsdown && vitest run tests",
     "test:conformance": "pnpm build && vitest run conformance",
     "typecheck": "tsc --noEmit",
-    "lint": "oxlint -c .oxlintrc.json src tests conformance scripts",
+    "lint": "oxlint -c oxlint.config.ts src tests conformance scripts",
     "release": "changeset version && pnpm build && changeset publish"
   },
   "dependencies": {
@@ -54,8 +54,8 @@
     "@changesets/cli": "^3.0.1",
     "@graphql-eslint/eslint-plugin": "^4.4.1",
     "@types/esquery": "^1.5.4",
-    "@types/node": "^22.12.0",
-    "eslint": "^9",
+    "@types/node": "^22.13.0",
+    "eslint": "^10.9.1",
     "graphql": "^16",
     "oxlint": "^1.80.0",
     "tsdown": "^0.22.14",

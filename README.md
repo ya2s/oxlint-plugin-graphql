@@ -30,7 +30,23 @@ an oxlint plugin, not a linter on its own.
 
 ## Quick start
 
-`.oxlintrc.json`:
+`oxlint.config.ts`:
+
+```ts
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  jsPlugins: ["oxlint-plugin-graphql"],
+  rules: {
+    "graphql/no-anonymous-operations": "error",
+    "graphql/require-selections": "error",
+    "graphql/parse-error": "error",
+  },
+});
+```
+
+<details>
+<summary>Same thing in <code>.oxlintrc.json</code></summary>
 
 ```json
 {
@@ -42,6 +58,8 @@ an oxlint plugin, not a linter on its own.
   }
 }
 ```
+
+</details>
 
 `graphql/parse-error` is included above so a broken `gql` template is actually reported —
 without it, a GraphQL syntax error is silently skipped by every other rule (see [Behavioural
@@ -93,6 +111,15 @@ configs:
 | `operations-recommended` | 33                                                |
 | `operations-all`          | 38                                                |
 
+**From `oxlint.config.ts`**, import the config object directly and pass it to `extends`:
+
+```ts
+import { defineConfig } from "oxlint";
+import { operationsRecommended } from "oxlint-plugin-graphql";
+
+export default defineConfig({ extends: [operationsRecommended] });
+```
+
 **From `.oxlintrc.json`**, `extends` a generated JSON fragment (published under
 `dist/configs/<name>.json`) by its path on disk — oxlint resolves each `extends` entry as a plain
 filesystem path relative to the config file, not through Node's module/`exports` resolution, so a
@@ -107,15 +134,6 @@ part in how `.oxlintrc.json`'s `extends` finds this file. Use the relative path 
 {
   "extends": ["./node_modules/oxlint-plugin-graphql/dist/configs/operations-recommended.json"]
 }
-```
-
-**From `oxlint.config.ts`**, import the config object directly and pass it to `extends`:
-
-```ts
-import { defineConfig } from "oxlint";
-import { operationsRecommended } from "oxlint-plugin-graphql";
-
-export default defineConfig({ extends: [operationsRecommended] });
 ```
 
 Both forms were verified end to end against a real installed copy of this package (`file:`
@@ -141,20 +159,22 @@ dependency, real `node_modules` resolution) — `graphql(no-anonymous-operations
 To only run these rules against certain files, put `jsPlugins` inside an `overrides` entry instead
 of at the top level:
 
-```json
-{
-  "plugins": [],
-  "overrides": [
+```ts
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  plugins: [],
+  overrides: [
     {
-      "files": ["*.graphql.ts"],
-      "jsPlugins": ["oxlint-plugin-graphql"],
-      "rules": {
+      files: ["*.graphql.ts"],
+      jsPlugins: ["oxlint-plugin-graphql"],
+      rules: {
         "graphql/no-anonymous-operations": "error",
-        "graphql/parse-error": "error"
-      }
-    }
-  ]
-}
+        "graphql/parse-error": "error",
+      },
+    },
+  ],
+});
 ```
 
 `graphql/parse-error` is included here too, for the same reason as in Quick start: without it, a
@@ -168,14 +188,16 @@ file that doesn't match the glob gets none.
 The plugin registers itself as `graphql`. If that name ever collides with a future built-in oxlint
 plugin, give it an alias with `jsPlugins`' object form:
 
-```json
-{
-  "jsPlugins": [{ "name": "gql", "specifier": "oxlint-plugin-graphql" }],
-  "rules": {
+```ts
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  jsPlugins: [{ name: "gql", specifier: "oxlint-plugin-graphql" }],
+  rules: {
     "gql/no-anonymous-operations": "error",
-    "gql/parse-error": "error"
-  }
-}
+    "gql/parse-error": "error",
+  },
+});
 ```
 
 The alias applies to every rule id, including this plugin's own `parse-error` — it's included
@@ -189,20 +211,23 @@ config.
 Existing `graphql.config.*`/`.graphqlrc.*` files work unchanged — nothing about how this plugin
 reads them differs from graphql-eslint itself, and none of the options graphql-eslint v4 removed
 (e.g. the old `parserOptions.schema`) come back. If your project has no graphql-config at all, set
-`settings.graphql.schemaSdl` in `.oxlintrc.json` directly:
+`settings.graphql.schemaSdl` in your oxlint config directly:
 
-```json
-{
-  "jsPlugins": ["oxlint-plugin-graphql"],
-  "settings": {
-    "graphql": {
-      "schemaSdl": "type Query { user: User }\ntype User { id: ID! name: String @deprecated(reason: \"use fullName instead\") fullName: String }"
-    }
+```ts
+import { defineConfig } from "oxlint";
+
+export default defineConfig({
+  jsPlugins: ["oxlint-plugin-graphql"],
+  settings: {
+    graphql: {
+      schemaSdl:
+        'type Query { user: User }\ntype User { id: ID! name: String @deprecated(reason: "use fullName instead") fullName: String }',
+    },
   },
-  "rules": {
-    "graphql/no-deprecated": "error"
-  }
-}
+  rules: {
+    "graphql/no-deprecated": "error",
+  },
+});
 ```
 
 Against an `app.ts` containing:
@@ -463,7 +488,14 @@ Run it yourself: `pnpm test:conformance` (builds the package first, then runs th
   `tsdown` on the `22.13`/`24` test legs, only on a dedicated `24` build job (see
   [`.github/workflows/ci.yml`](.github/workflows/ci.yml)).
 - ESM only
-- `@graphql-eslint/eslint-plugin` `^4.4.1` and `graphql` `^16` as peer dependencies
+- `@graphql-eslint/eslint-plugin` `^4.4.1` and `graphql` `^16` as peer dependencies.
+  `graphql` is pinned to v16 rather than the current v17 because that is what the library this
+  plugin bridges requires: `@graphql-eslint/eslint-plugin@4.4.1` declares `peerDependencies.graphql`
+  as `^16`, so installing `graphql@17` alongside it fails resolution (`npm` reports `ERESOLVE`,
+  `Could not resolve dependency: peer graphql@"^16" from @graphql-eslint/eslint-plugin@4.4.1`).
+  Forced past that with `--legacy-peer-deps`, graphql-eslint's parser does still work against
+  `graphql@17` in a basic probe — so the constraint is upstream's declaration, not a known
+  incompatibility, and this peer range widens to `^16 || ^17` as soon as graphql-eslint supports it.
 - `oxlint` itself (not a declared peer — bring your own; verified against `1.80.0`)
 
 `esquery` is a regular runtime dependency (not bundled into the published output) — graphql-eslint
