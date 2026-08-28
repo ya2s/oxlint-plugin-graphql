@@ -1,5 +1,11 @@
 # oxlint-plugin-graphql-eslint
 
+## 0.1.3
+
+### Patch Changes
+
+- ead155c: Expose `./package.json` from the package `exports` map so tooling that resolves `oxlint-plugin-graphql-eslint/package.json` (e.g. version checks) no longer fails with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+
 ## 0.1.2
 
 ### Patch Changes
